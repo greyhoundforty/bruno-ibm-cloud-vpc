@@ -1,0 +1,164 @@
+meta {
+  name: Get Load Balancer by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/load_balancers/:load_balancer_id?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:path {
+  load_balancer_id: {{load_balancer_id}}
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const lb = res.body;
+    console.log(`\n=== Load Balancer Details ===`);
+    console.log(`Name: ${lb.name}`);
+    console.log(`ID: ${lb.id}`);
+    console.log(`Hostname: ${lb.hostname || 'N/A'}`);
+    console.log(`Type: ${lb.is_public ? 'Public' : 'Private'}`);
+    console.log(`Provisioning Status: ${lb.provisioning_status}`);
+    console.log(`Operating Status: ${lb.operating_status || 'N/A'}`);
+    console.log(`CRN: ${lb.crn}`);
+    console.log(`Created: ${lb.created_at}`);
+
+    console.log(`\n--- Configuration ---`);
+    console.log(`Profile: ${lb.profile?.name || 'N/A'} (${lb.profile?.family || 'N/A'})`);
+    console.log(`Route Mode: ${lb.route_mode ? 'Enabled' : 'Disabled'}`);
+    console.log(`Logging: ${lb.logging?.datapath?.active ? 'Active' : 'Inactive'}`);
+    console.log(`Resource Group: ${lb.resource_group?.name || 'N/A'}`);
+
+    if (lb.subnets && lb.subnets.length > 0) {
+      console.log(`\n--- Subnets (${lb.subnets.length}) ---`);
+      lb.subnets.forEach(subnet => {
+        console.log(`  - ${subnet.name || 'N/A'} (${subnet.id})`);
+        console.log(`    Zone: ${subnet.zone?.name || 'N/A'}`);
+      });
+    }
+
+    if (lb.public_ips && lb.public_ips.length > 0) {
+      console.log(`\n--- Public IPs (${lb.public_ips.length}) ---`);
+      lb.public_ips.forEach(ip => {
+        console.log(`  - ${ip.address || ip}`);
+      });
+    }
+
+    if (lb.private_ips && lb.private_ips.length > 0) {
+      console.log(`\n--- Private IPs (${lb.private_ips.length}) ---`);
+      lb.private_ips.forEach(ip => {
+        console.log(`  - ${ip.address || ip}`);
+      });
+    }
+
+    if (lb.listeners && lb.listeners.length > 0) {
+      console.log(`\n--- Listeners (${lb.listeners.length}) ---`);
+      lb.listeners.forEach(listener => {
+        console.log(`  - ${listener.protocol}:${listener.port}`);
+        console.log(`    Default Pool: ${listener.default_pool?.name || 'None'}`);
+        if (listener.certificate_instance) {
+          console.log(`    SSL Certificate: ${listener.certificate_instance.crn}`);
+        }
+        if (listener.policies && listener.policies.length > 0) {
+          console.log(`    Policies: ${listener.policies.length}`);
+        }
+      });
+    }
+
+    if (lb.pools && lb.pools.length > 0) {
+      console.log(`\n--- Pools (${lb.pools.length}) ---`);
+      lb.pools.forEach(pool => {
+        console.log(`  - ${pool.name}`);
+        console.log(`    Algorithm: ${pool.algorithm || 'N/A'}`);
+        console.log(`    Protocol: ${pool.protocol || 'N/A'}`);
+        console.log(`    Health Monitor: ${pool.health_monitor?.type || 'N/A'} (Port: ${pool.health_monitor?.port || 'N/A'})`);
+        console.log(`    Members: ${pool.members?.length || 0}`);
+        console.log(`    Provisioning Status: ${pool.provisioning_status}`);
+      });
+    }
+
+    console.log(`\n--- Health & Status ---`);
+    console.log(`Health State: ${lb.health_state || 'N/A'}`);
+    console.log(`Lifecycle State: ${lb.lifecycle_state || 'N/A'}`);
+
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  } else if (res.status === 404) {
+    console.error("Load Balancer not found - check the LOAD_BALANCER_ID environment variable");
+  } else {
+    console.error(`Error: ${res.status} - ${res.statusText}`);
+  }
+}
+
+docs {
+  # Get Specific Load Balancer
+
+  Retrieves details for a single VPC load balancer by ID.
+
+  ## Usage:
+  Set LOAD_BALANCER_ID environment variable and run:
+  LOAD_BALANCER_ID=r006-abc123... mise run load-balancers:get
+
+  Or directly with Bruno CLI:
+  LOAD_BALANCER_ID=r006-abc123... fnox run -- bru run auth/get-iam-token.bru vpc/load-balancers/get-load-balancer.bru --env dts
+
+  ## Response:
+  Returns detailed load balancer object with:
+  - id, name, hostname, crn, created_at
+  - is_public: Boolean (true=public, false=private)
+  - provisioning_status: Current operational status
+  - operating_status: Health status (online, degraded, offline)
+  - profile: Load balancer profile and family
+  - subnets: Subnets where LB is deployed
+  - public_ips/private_ips: IP addresses
+  - listeners: Frontend configurations (ports/protocols/SSL)
+  - pools: Backend server groups with health checks
+  - health_state: Overall health
+  - logging: DataPath logging status
+
+  ## Provisioning Status Values:
+  - active: Load balancer is operational
+  - create_pending: Load balancer is being created
+  - update_pending: Load balancer is being updated
+  - delete_pending: Load balancer is being deleted
+  - failed: Provisioning failed
+
+  ## Operating Status Values:
+  - online: All pools have healthy members
+  - degraded: Some pools have no healthy members
+  - offline: No pools have healthy members
+
+  ## Listener Protocols:
+  - http: HTTP traffic
+  - https: HTTPS with SSL termination
+  - tcp: TCP traffic
+  - udp: UDP traffic
+
+  ## Pool Algorithms:
+  - round_robin: Distribute equally
+  - weighted_round_robin: Distribute by weight
+  - least_connections: Send to least busy member
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 404: Load Balancer not found
+  - 400: Invalid ID format
+}

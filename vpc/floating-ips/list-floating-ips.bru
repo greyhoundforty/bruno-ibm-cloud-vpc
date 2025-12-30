@@ -1,0 +1,97 @@
+meta {
+  name: List Floating IPs
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/floating_ips?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const floatingIps = res.body.floating_ips;
+    console.log(`Found ${floatingIps.length} floating IP(s):`);
+
+    floatingIps.forEach(fip => {
+      console.log(`  - ${fip.name} (${fip.id})`);
+      console.log(`    Address: ${fip.address}`);
+      console.log(`    Status: ${fip.status}`);
+      console.log(`    Zone: ${fip.zone?.name || 'N/A'}`);
+      if (fip.target) {
+        console.log(`    Target: ${fip.target.name || fip.target.id} (${fip.target.resource_type})`);
+      } else {
+        console.log(`    Target: Unassigned`);
+      }
+      console.log(`    Created: ${fip.created_at}`);
+    });
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  }
+}
+
+docs {
+  # List Floating IPs
+
+  Returns all floating IPs (public IP addresses) in your IBM Cloud account for the specified region.
+
+  ## Query Parameters:
+  - version: API version (required)
+  - generation: Always use "2" for VPC Gen2
+  - resource_group.id: Filter by resource group (optional)
+  - zone.name: Filter by zone (e.g., us-south-1) (optional)
+  - target.id: Filter by target resource (optional)
+  - limit: Max results per page (default: 50)
+  - start: Pagination token for next page
+
+  ## Response:
+  Returns array of floating IP objects with:
+  - id, name, address, status, created_at
+  - zone: Availability zone
+  - resource_group: Resource group info
+  - target: Attached resource (network interface, public gateway, etc.)
+  - crn: Cloud Resource Name
+
+  ## Floating IP Status Values:
+  - available: IP is assigned and ready
+  - pending: IP is being created
+  - deleting: IP is being deleted
+  - failed: IP allocation failed
+
+  ## Target Resource Types:
+  - network_interface: Attached to instance network interface
+  - public_gateway: Attached to public gateway
+  - vpn_gateway: Attached to VPN gateway
+  - null: Unassigned (reserved but not in use)
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 400: Invalid parameters
+
+  ## Filter Examples:
+  Add these to query params to filter results:
+  - zone.name=us-south-1: Only show floating IPs in zone
+  - resource_group.id=xyz789: Only show floating IPs in resource group
+
+  ## Use Cases:
+  - Public internet access for instances
+  - High availability failover IPs
+  - VPN gateway connectivity
+  - Public gateway routing
+}

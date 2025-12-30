@@ -1,0 +1,135 @@
+meta {
+  name: Get Security Group by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/security_groups/:security_group_id?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:path {
+  security_group_id: {{security_group_id}}
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const sg = res.body;
+    console.log(`\n=== Security Group Details ===`);
+    console.log(`Name: ${sg.name}`);
+    console.log(`ID: ${sg.id}`);
+    console.log(`CRN: ${sg.crn}`);
+    console.log(`Created: ${sg.created_at}`);
+
+    console.log(`\nVPC: ${sg.vpc?.name || 'N/A'} (${sg.vpc?.id || 'N/A'})`);
+    console.log(`Resource Group: ${sg.resource_group?.name || 'N/A'} (${sg.resource_group?.id || 'N/A'})`);
+
+    if (sg.rules && sg.rules.length > 0) {
+      console.log(`\n--- Security Rules (${sg.rules.length}) ---`);
+      sg.rules.forEach((rule, index) => {
+        console.log(`\n  Rule ${index + 1}: ${rule.id}`);
+        console.log(`    Direction: ${rule.direction}`);
+        console.log(`    Protocol: ${rule.protocol}`);
+        console.log(`    IP Version: ${rule.ip_version || 'ipv4'}`);
+
+        if (rule.remote) {
+          if (rule.remote.cidr_block) {
+            console.log(`    Remote: ${rule.remote.cidr_block}`);
+          } else if (rule.remote.address) {
+            console.log(`    Remote: ${rule.remote.address}`);
+          } else if (rule.remote.name) {
+            console.log(`    Remote: ${rule.remote.name} (Security Group)`);
+          }
+        }
+
+        if (rule.port_min && rule.port_max) {
+          console.log(`    Ports: ${rule.port_min}-${rule.port_max}`);
+        } else if (rule.port_min) {
+          console.log(`    Port: ${rule.port_min}`);
+        }
+
+        if (rule.code !== undefined) {
+          console.log(`    ICMP Code: ${rule.code}`);
+        }
+        if (rule.type !== undefined) {
+          console.log(`    ICMP Type: ${rule.type}`);
+        }
+      });
+    }
+
+    if (sg.network_interfaces && sg.network_interfaces.length > 0) {
+      console.log(`\n--- Attached Network Interfaces (${sg.network_interfaces.length}) ---`);
+      sg.network_interfaces.forEach(nic => {
+        console.log(`  - ${nic.name || nic.id}`);
+      });
+    } else {
+      console.log(`\n--- Attached Network Interfaces ---`);
+      console.log(`  None`);
+    }
+
+    if (sg.targets && sg.targets.length > 0) {
+      console.log(`\n--- Targets (${sg.targets.length}) ---`);
+      sg.targets.forEach(target => {
+        console.log(`  - ${target.name || target.id} (${target.resource_type})`);
+      });
+    }
+
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  } else if (res.status === 404) {
+    console.error("Security Group not found - check the SECURITY_GROUP_ID environment variable");
+  } else {
+    console.error(`Error: ${res.status} - ${res.statusText}`);
+  }
+}
+
+docs {
+  # Get Specific Security Group
+
+  Retrieves details for a single security group by ID, including all security rules.
+
+  ## Usage:
+  Set SECURITY_GROUP_ID environment variable and run:
+  SECURITY_GROUP_ID=r006-abc123... mise run security-groups:get
+
+  Or directly with Bruno CLI:
+  SECURITY_GROUP_ID=r006-abc123... fnox run -- bru run auth/get-iam-token.bru vpc/security-groups/get-security-group.bru --env dts
+
+  ## Response:
+  Returns detailed security group object with:
+  - id, name, crn, created_at
+  - vpc: Parent VPC reference
+  - resource_group: Resource group info
+  - rules: Array of security rules with direction, protocol, ports, remote
+  - network_interfaces: Attached network interfaces
+  - targets: Resources protected by this security group
+
+  ## Security Rule Fields:
+  - direction: inbound or outbound
+  - protocol: tcp, udp, icmp, or all
+  - ip_version: ipv4 or ipv6
+  - remote: CIDR block, IP address, or security group
+  - port_min/port_max: Port range (TCP/UDP only)
+  - code/type: ICMP parameters (ICMP only)
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 404: Security Group not found
+  - 400: Invalid ID format
+}

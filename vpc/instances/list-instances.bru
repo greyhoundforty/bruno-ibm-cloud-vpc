@@ -1,0 +1,90 @@
+meta {
+  name: List Instances
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/instances?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const instances = res.body.instances;
+    console.log(`Found ${instances.length} instance(s):`);
+
+    instances.forEach(instance => {
+      console.log(`  - ${instance.name} (${instance.id})`);
+      console.log(`    Status: ${instance.status}`);
+      console.log(`    Profile: ${instance.profile?.name || 'N/A'}`);
+      console.log(`    Zone: ${instance.zone?.name || 'N/A'}`);
+      console.log(`    VPC: ${instance.vpc?.name || 'N/A'}`);
+      console.log(`    Primary IP: ${instance.primary_network_interface?.primary_ip?.address || 'N/A'}`);
+      console.log(`    Created: ${instance.created_at}`);
+    });
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  }
+}
+
+docs {
+  # List Instances (Virtual Server Instances)
+
+  Returns all virtual server instances (VSIs) in your IBM Cloud account for the specified region.
+
+  ## Query Parameters:
+  - version: API version (required)
+  - generation: Always use "2" for VPC Gen2
+  - vpc.id: Filter by VPC (optional)
+  - vpc.name: Filter by VPC name (optional)
+  - zone.name: Filter by zone (e.g., us-south-1) (optional)
+  - resource_group.id: Filter by resource group (optional)
+  - limit: Max results per page (default: 50)
+  - start: Pagination token for next page
+
+  ## Response:
+  Returns array of instance objects with:
+  - id, name, status, created_at
+  - vpc: Reference to parent VPC
+  - zone: Availability zone
+  - profile: Instance profile (compute/memory configuration)
+  - image: Operating system image
+  - primary_network_interface: Network configuration with IP
+  - boot_volume_attachment: Boot volume details
+  - volume_attachments: Data volume details
+  - network_interfaces: All network interfaces
+
+  ## Instance Status Values:
+  - running: Instance is active
+  - stopped: Instance is powered off
+  - pending: Instance is being created
+  - starting: Instance is booting
+  - stopping: Instance is shutting down
+  - failed: Instance creation failed
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 400: Invalid parameters
+
+  ## Filter Examples:
+  Add these to query params to filter results:
+  - vpc.id=r006-abc123: Only show instances in specific VPC
+  - zone.name=us-south-1: Only show instances in zone
+  - status=running: Only show running instances
+}

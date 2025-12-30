@@ -1,0 +1,139 @@
+meta {
+  name: Get Instance by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/instances/:instance_id?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:path {
+  instance_id: {{instance_id}}
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const instance = res.body;
+    console.log(`\n=== Instance Details ===`);
+    console.log(`Name: ${instance.name}`);
+    console.log(`ID: ${instance.id}`);
+    console.log(`Status: ${instance.status}`);
+    console.log(`CRN: ${instance.crn}`);
+    console.log(`Created: ${instance.created_at}`);
+
+    console.log(`\n--- Compute Configuration ---`);
+    console.log(`Profile: ${instance.profile?.name || 'N/A'}`);
+    console.log(`vCPUs: ${instance.vcpu?.count || 'N/A'} (${instance.vcpu?.architecture || 'N/A'})`);
+    console.log(`Memory: ${instance.memory || 'N/A'} GB`);
+    console.log(`Bandwidth: ${instance.bandwidth || 'N/A'} Mbps`);
+
+    console.log(`\n--- Location ---`);
+    console.log(`VPC: ${instance.vpc?.name || 'N/A'} (${instance.vpc?.id || 'N/A'})`);
+    console.log(`Zone: ${instance.zone?.name || 'N/A'}`);
+    console.log(`Resource Group: ${instance.resource_group?.name || 'N/A'}`);
+
+    console.log(`\n--- Image & Boot Volume ---`);
+    console.log(`Image: ${instance.image?.name || 'N/A'} (${instance.image?.id || 'N/A'})`);
+    if (instance.boot_volume_attachment) {
+      console.log(`Boot Volume: ${instance.boot_volume_attachment.volume?.name || 'N/A'}`);
+      console.log(`  Capacity: ${instance.boot_volume_attachment.volume?.capacity || 'N/A'} GB`);
+    }
+
+    if (instance.primary_network_interface) {
+      console.log(`\n--- Primary Network Interface ---`);
+      const pnic = instance.primary_network_interface;
+      console.log(`Name: ${pnic.name}`);
+      console.log(`Primary IP: ${pnic.primary_ip?.address || pnic.primary_ipv4_address || 'N/A'}`);
+      console.log(`Subnet: ${pnic.subnet?.name || 'N/A'} (${pnic.subnet?.id || 'N/A'})`);
+      if (pnic.security_groups && pnic.security_groups.length > 0) {
+        console.log(`Security Groups: ${pnic.security_groups.map(sg => sg.name).join(', ')}`);
+      }
+      if (pnic.floating_ips && pnic.floating_ips.length > 0) {
+        console.log(`Floating IPs: ${pnic.floating_ips.map(fip => fip.address).join(', ')}`);
+      }
+    }
+
+    if (instance.network_interfaces && instance.network_interfaces.length > 1) {
+      console.log(`\n--- Additional Network Interfaces (${instance.network_interfaces.length - 1}) ---`);
+      instance.network_interfaces.slice(1).forEach(nic => {
+        console.log(`  - ${nic.name}: ${nic.primary_ip?.address || nic.primary_ipv4_address || 'N/A'}`);
+      });
+    }
+
+    if (instance.volume_attachments && instance.volume_attachments.length > 1) {
+      console.log(`\n--- Data Volumes (${instance.volume_attachments.length - 1}) ---`);
+      instance.volume_attachments.filter(va => va.type !== 'boot').forEach(va => {
+        console.log(`  - ${va.volume?.name || 'N/A'}: ${va.volume?.capacity || 'N/A'} GB`);
+      });
+    }
+
+    console.log(`\n--- Additional Info ---`);
+    console.log(`Health State: ${instance.health_state || 'N/A'}`);
+    console.log(`Lifecycle State: ${instance.lifecycle_state || 'N/A'}`);
+    console.log(`Placement Target: ${instance.placement_target?.name || 'Default'}`);
+
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  } else if (res.status === 404) {
+    console.error("Instance not found - check the INSTANCE_ID environment variable");
+  } else {
+    console.error(`Error: ${res.status} - ${res.statusText}`);
+  }
+}
+
+docs {
+  # Get Specific Instance (VSI)
+
+  Retrieves details for a single virtual server instance by ID.
+
+  ## Usage:
+  Set INSTANCE_ID environment variable and run:
+  INSTANCE_ID=r006-abc123... mise run instances:get
+
+  Or directly with Bruno CLI:
+  INSTANCE_ID=r006-abc123... fnox run -- bru run auth/get-iam-token.bru vpc/instances/get-instance.bru --env dts
+
+  ## Response:
+  Returns detailed instance object with:
+  - id, name, status, crn, created_at
+  - profile: Compute profile (vCPUs, memory, bandwidth)
+  - vpc, zone, resource_group
+  - image: Operating system image
+  - boot_volume_attachment: Boot volume details
+  - primary_network_interface: Primary NIC with IP, subnet, security groups
+  - network_interfaces: All NICs
+  - volume_attachments: All attached volumes
+  - health_state: Overall instance health
+  - lifecycle_state: Instance lifecycle status
+
+  ## Instance Status Values:
+  - running: Instance is active
+  - stopped: Instance is powered off
+  - pending: Instance is being created
+  - starting: Instance is booting
+  - stopping: Instance is shutting down
+  - restarting: Instance is rebooting
+  - failed: Instance creation/operation failed
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 404: Instance not found
+  - 400: Invalid ID format
+}

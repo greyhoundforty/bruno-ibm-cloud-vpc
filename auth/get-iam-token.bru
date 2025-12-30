@@ -1,0 +1,54 @@
+meta {
+  name: Get IAM Token
+  type: http
+  seq: 1
+}
+
+post {
+  url: {{iam_endpoint}}/identity/token
+  body: formUrlEncoded
+  auth: none
+}
+
+headers {
+  Content-Type: application/x-www-form-urlencoded
+  Accept: application/json
+}
+
+body:form-urlencoded {
+  grant_type: urn:ibm:params:oauth:grant-type:apikey
+  apikey: {{ibm_api_key}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const token = res.body.access_token;
+    bru.setEnvVar("bearer_token", token);
+    
+    console.log("✓ IAM token obtained successfully");
+    console.log("Token expires in:", res.body.expires_in, "seconds");
+  } else {
+    console.error("Failed to get IAM token:", res.status);
+  }
+}
+
+docs {
+  # IBM Cloud IAM Authentication
+  
+  This request exchanges your API key for a bearer token that's valid for 1 hour.
+  
+  ## Flow:
+  1. Send API key to IAM endpoint
+  2. Receive access_token in response
+  3. Post-response script automatically saves token to environment
+  4. Use token in subsequent requests
+  
+  ## Token Lifetime:
+  - Tokens expire after 3600 seconds (1 hour)
+  - Run this request again when you get 401 errors
+  
+  ## Security Note:
+  - Never commit API keys to git
+  - Use fnox: `fnox secret set IBM_API_KEY your-key`
+  - Bruno reads from process.env.IBM_API_KEY automatically
+}

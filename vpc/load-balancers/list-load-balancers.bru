@@ -1,0 +1,108 @@
+meta {
+  name: List Load Balancers
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/load_balancers?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const loadBalancers = res.body.load_balancers;
+    console.log(`Found ${loadBalancers.length} load balancer(s):`);
+
+    loadBalancers.forEach(lb => {
+      console.log(`  - ${lb.name} (${lb.id})`);
+      console.log(`    Hostname: ${lb.hostname || 'N/A'}`);
+      console.log(`    Status: ${lb.provisioning_status}`);
+      console.log(`    Type: ${lb.is_public ? 'Public' : 'Private'}`);
+      console.log(`    Subnets: ${lb.subnets?.length || 0}`);
+      console.log(`    Listeners: ${lb.listeners?.length || 0}`);
+      console.log(`    Pools: ${lb.pools?.length || 0}`);
+      console.log(`    Created: ${lb.created_at}`);
+    });
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  }
+}
+
+docs {
+  # List Load Balancers
+
+  Returns all VPC load balancers in your IBM Cloud account for the specified region.
+
+  ## Query Parameters:
+  - version: API version (required)
+  - generation: Always use "2" for VPC Gen2
+  - resource_group.id: Filter by resource group (optional)
+  - limit: Max results per page (default: 50)
+  - start: Pagination token for next page
+
+  ## Response:
+  Returns array of load balancer objects with:
+  - id, name, hostname, created_at
+  - is_public: Boolean (true=public, false=private)
+  - provisioning_status: Current operational status
+  - operating_status: Health status
+  - subnets: Array of subnets LB is deployed to
+  - listeners: Frontend configurations (ports/protocols)
+  - pools: Backend server groups
+  - profile: Load balancer profile (family/type)
+  - resource_group: Resource group info
+
+  ## Provisioning Status Values:
+  - active: Load balancer is operational
+  - create_pending: Load balancer is being created
+  - update_pending: Load balancer is being updated
+  - delete_pending: Load balancer is being deleted
+  - failed: Provisioning failed
+
+  ## Operating Status Values:
+  - online: All pools have healthy members
+  - degraded: Some pools have no healthy members
+  - offline: No pools have healthy members
+  - disabled: Load balancer is disabled
+
+  ## Load Balancer Types:
+  - Public: Internet-facing with public IP
+  - Private: Internal-only within VPC
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 400: Invalid parameters
+
+  ## Filter Examples:
+  Add these to query params to filter results:
+  - resource_group.id=xyz789: Only show load balancers in resource group
+
+  ## Load Balancer Components:
+  - Listeners: Frontend configuration (ports, protocols, SSL)
+  - Pools: Backend server groups with health checks
+  - Members: Individual backend servers (instances)
+  - Policies: Routing rules for traffic distribution
+
+  ## Use Cases:
+  - HTTP/HTTPS application load balancing
+  - TCP/UDP network load balancing
+  - SSL termination
+  - Health checking and auto-failover
+  - Multi-zone high availability
+}

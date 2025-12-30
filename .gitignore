@@ -1,0 +1,36 @@
+# Secrets and credentials
+.env
+.env.local
+*.key
+*.pem
+
+# fnox encrypted secrets (safe to commit .fnox/ directory)
+# fnox stores encrypted data, but exclude local cache if any
+.fnox/cache/
+
+# Bruno temporary files
+.bruno/
+
+# Node modules (if any)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+*.tmp
+*.temp

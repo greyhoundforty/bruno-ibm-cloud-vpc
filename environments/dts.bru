@@ -1,0 +1,14 @@
+vars {
+  ibm_api_key: {{process.env.DTS_IBM_API_KEY}}
+  region: us-south
+  vpc_endpoint: https://{{region}}.iaas.cloud.ibm.com
+  iam_endpoint: https://iam.cloud.ibm.com
+  bearer_token:
+  api_version: 2024-12-10
+  vpc_id: {{process.env.VPC_ID}}
+  security_group_id: {{process.env.SECURITY_GROUP_ID}}
+  instance_id: {{process.env.INSTANCE_ID}}
+  floating_ip_id: {{process.env.FLOATING_IP_ID}}
+  load_balancer_id: {{process.env.LOAD_BALANCER_ID}}
+  subnet_id: {{process.env.SUBNET_ID}}
+}

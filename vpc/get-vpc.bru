@@ -1,0 +1,104 @@
+meta {
+  name: Get VPC by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/vpcs/:vpc_id?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:path {
+  vpc_id: {{vpc_id}}
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const vpc = res.body;
+    console.log(`\n=== VPC Details ===`);
+    console.log(`Name: ${vpc.name}`);
+    console.log(`ID: ${vpc.id}`);
+    console.log(`Status: ${vpc.status}`);
+    console.log(`CRN: ${vpc.crn}`);
+    console.log(`Created: ${vpc.created_at}`);
+
+    console.log(`\nRegion: ${vpc.region?.name || 'N/A'}`);
+    console.log(`Resource Group: ${vpc.resource_group?.name || 'N/A'} (${vpc.resource_group?.id || 'N/A'})`);
+
+    console.log(`\n--- Default Resources ---`);
+    console.log(`Security Group: ${vpc.default_security_group?.name || 'N/A'} (${vpc.default_security_group?.id || 'N/A'})`);
+    console.log(`Network ACL: ${vpc.default_network_acl?.name || 'N/A'} (${vpc.default_network_acl?.id || 'N/A'})`);
+    console.log(`Routing Table: ${vpc.default_routing_table?.name || 'N/A'} (${vpc.default_routing_table?.id || 'N/A'})`);
+
+    if (vpc.cse_source_ips && vpc.cse_source_ips.length > 0) {
+      console.log(`\n--- Cloud Service Endpoint Source IPs ---`);
+      vpc.cse_source_ips.forEach(cse => {
+        console.log(`  Zone ${cse.zone?.name || 'N/A'}: ${cse.ip?.address || cse.address || 'Not allocated'}`);
+      });
+    }
+
+    if (vpc.subnets && vpc.subnets.length > 0) {
+      console.log(`\n--- Subnets (${vpc.subnets.length}) ---`);
+      vpc.subnets.forEach(subnet => {
+        console.log(`  - ${subnet.name} (${subnet.id})`);
+      });
+    }
+
+    console.log(`\n--- Additional Info ---`);
+    console.log(`Classic Access: ${vpc.classic_access ? 'Enabled' : 'Disabled'}`);
+    console.log(`DNS Resolution Binding: ${vpc.dns?.enable_hub ? 'Enabled' : 'Disabled'}`);
+    console.log(`Health State: ${vpc.health_state || 'N/A'}`);
+
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  } else if (res.status === 404) {
+    console.error("VPC not found - check the VPC_ID environment variable");
+  } else {
+    console.error(`Error: ${res.status} - ${res.statusText}`);
+  }
+}
+
+docs {
+  # Get Specific VPC
+
+  Retrieves details for a single VPC by ID.
+
+  ## Usage:
+  Set VPC_ID environment variable and run:
+  VPC_ID=r006-abc123... mise run vpc:get
+
+  Or directly with Bruno CLI:
+  VPC_ID=r006-abc123... fnox run -- bru run auth/get-iam-token.bru vpc/get-vpc.bru --env dts
+
+  ## Response:
+  Returns detailed VPC object with:
+  - id, name, status, crn, created_at
+  - region, resource_group
+  - default_security_group, default_network_acl, default_routing_table
+  - cse_source_ips: Cloud Service Endpoint IPs per zone
+  - subnets: List of subnets in VPC
+  - classic_access: Boolean for classic infrastructure access
+  - dns: DNS resolution settings
+  - health_state: Overall VPC health status
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 404: VPC not found (check VPC_ID)
+  - 400: Invalid VPC ID format
+}

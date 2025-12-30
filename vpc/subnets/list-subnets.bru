@@ -1,0 +1,66 @@
+meta {
+  name: List Subnets
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/subnets?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const subnets = res.body.subnets;
+    console.log(`Found ${subnets.length} subnet(s):`);
+    
+    subnets.forEach(subnet => {
+      console.log(`\n  ${subnet.name} (${subnet.id})`);
+      console.log(`    VPC: ${subnet.vpc.name}`);
+      console.log(`    Zone: ${subnet.zone.name}`);
+      console.log(`    CIDR: ${subnet.ipv4_cidr_block}`);
+      console.log(`    Available IPs: ${subnet.available_ipv4_address_count}`);
+      console.log(`    Status: ${subnet.status}`);
+    });
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  }
+}
+
+docs {
+  # List Subnets
+  
+  Returns all subnets across all VPCs in the region.
+  
+  ## Query Parameters:
+  - vpc.id: Filter by specific VPC
+  - zone.name: Filter by availability zone
+  - resource_group.id: Filter by resource group
+  
+  ## Response Fields:
+  - ipv4_cidr_block: Subnet CIDR (e.g., "10.240.0.0/24")
+  - available_ipv4_address_count: Free IP addresses
+  - total_ipv4_address_count: Total addresses in CIDR
+  - network_acl: Associated network ACL
+  - public_gateway: Attached public gateway (if any)
+  - routing_table: Custom routing table (if configured)
+  
+  ## Common Use Cases:
+  1. Find subnets with available IPs
+  2. Audit subnet configurations
+  3. Map out network topology
+}

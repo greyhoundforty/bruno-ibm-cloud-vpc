@@ -1,0 +1,73 @@
+meta {
+  name: List Security Groups
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/security_groups?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const groups = res.body.security_groups;
+    console.log(`Found ${groups.length} security group(s):`);
+
+    groups.forEach(group => {
+      console.log(`  - ${group.name} (${group.id})`);
+      console.log(`    VPC: ${group.vpc?.name || 'N/A'}`);
+      console.log(`    Rules: ${group.rules?.length || 0}`);
+      console.log(`    Created: ${group.created_at}`);
+    });
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  }
+}
+
+docs {
+  # List Security Groups
+
+  Returns all security groups in your IBM Cloud account for the specified region.
+
+  ## Query Parameters:
+  - version: API version (required)
+  - generation: Always use "2" for VPC Gen2
+  - vpc.id: Filter by VPC (optional)
+  - vpc.name: Filter by VPC name (optional)
+  - resource_group.id: Filter by resource group (optional)
+  - limit: Max results per page (default: 50)
+  - start: Pagination token for next page
+
+  ## Response:
+  Returns array of security group objects with:
+  - id, name, created_at
+  - vpc: Reference to parent VPC
+  - resource_group: Resource group info
+  - rules: Array of security group rules (inbound/outbound)
+  - network_interfaces: Attached network interfaces
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 400: Invalid parameters
+
+  ## Filter Examples:
+  Add these to query params to filter results:
+  - vpc.id=r006-abc123: Only show security groups in specific VPC
+  - resource_group.id=xyz789: Only show security groups in resource group
+}

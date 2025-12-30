@@ -1,0 +1,65 @@
+meta {
+  name: List VPCs
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/vpcs?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const vpcs = res.body.vpcs;
+    console.log(`Found ${vpcs.length} VPC(s):`);
+    
+    vpcs.forEach(vpc => {
+      console.log(`  - ${vpc.name} (${vpc.id})`);
+      console.log(`    Status: ${vpc.status}`);
+      console.log(`    Region: ${vpc.region?.name || 'N/A'}`);
+      console.log(`    Created: ${vpc.created_at}`);
+    });
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  }
+}
+
+docs {
+  # List VPCs
+  
+  Returns all VPCs in your IBM Cloud account for the specified region.
+  
+  ## Query Parameters:
+  - version: API version (required)
+  - generation: Always use "2" for VPC Gen2
+  - resource_group.id: Filter by resource group (optional)
+  - limit: Max results per page (default: 50)
+  - start: Pagination token for next page
+  
+  ## Response:
+  Returns array of VPC objects with:
+  - id, name, status
+  - region, resource_group
+  - default_network_acl, default_routing_table
+  - default_security_group
+  
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 400: Invalid parameters
+}

@@ -1,0 +1,124 @@
+meta {
+  name: Get Floating IP by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/floating_ips/:floating_ip_id?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:path {
+  floating_ip_id: {{floating_ip_id}}
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const fip = res.body;
+    console.log(`\n=== Floating IP Details ===`);
+    console.log(`Name: ${fip.name}`);
+    console.log(`ID: ${fip.id}`);
+    console.log(`Address: ${fip.address}`);
+    console.log(`Status: ${fip.status}`);
+    console.log(`CRN: ${fip.crn}`);
+    console.log(`Created: ${fip.created_at}`);
+
+    console.log(`\n--- Location ---`);
+    console.log(`Zone: ${fip.zone?.name || 'N/A'}`);
+    console.log(`Resource Group: ${fip.resource_group?.name || 'N/A'} (${fip.resource_group?.id || 'N/A'})`);
+
+    console.log(`\n--- Target Information ---`);
+    if (fip.target) {
+      console.log(`Resource Type: ${fip.target.resource_type}`);
+      console.log(`Name: ${fip.target.name || 'N/A'}`);
+      console.log(`ID: ${fip.target.id}`);
+
+      if (fip.target.resource_type === 'network_interface') {
+        console.log(`Primary IP: ${fip.target.primary_ip?.address || fip.target.primary_ipv4_address || 'N/A'}`);
+        if (fip.target.instance) {
+          console.log(`Instance: ${fip.target.instance.name || 'N/A'} (${fip.target.instance.id || 'N/A'})`);
+        }
+      } else if (fip.target.resource_type === 'public_gateway') {
+        if (fip.target.vpc) {
+          console.log(`VPC: ${fip.target.vpc.name || 'N/A'} (${fip.target.vpc.id || 'N/A'})`);
+        }
+      } else if (fip.target.resource_type === 'vpn_gateway') {
+        console.log(`VPN Type: ${fip.target.mode || 'N/A'}`);
+      }
+    } else {
+      console.log(`Status: Unassigned (Reserved but not in use)`);
+    }
+
+    console.log(`\n--- Additional Info ---`);
+    console.log(`Health State: ${fip.health_state || 'N/A'}`);
+    console.log(`Lifecycle State: ${fip.lifecycle_state || 'N/A'}`);
+
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  } else if (res.status === 404) {
+    console.error("Floating IP not found - check the FLOATING_IP_ID environment variable");
+  } else {
+    console.error(`Error: ${res.status} - ${res.statusText}`);
+  }
+}
+
+docs {
+  # Get Specific Floating IP
+
+  Retrieves details for a single floating IP (public IP address) by ID.
+
+  ## Usage:
+  Set FLOATING_IP_ID environment variable and run:
+  FLOATING_IP_ID=r006-abc123... mise run floating-ips:get
+
+  Or directly with Bruno CLI:
+  FLOATING_IP_ID=r006-abc123... fnox run -- bru run auth/get-iam-token.bru vpc/floating-ips/get-floating-ip.bru --env dts
+
+  ## Response:
+  Returns detailed floating IP object with:
+  - id, name, address, status, crn, created_at
+  - zone: Availability zone
+  - resource_group: Resource group info
+  - target: Attached resource (network interface, public gateway, vpn gateway, or null)
+  - health_state: Overall health
+  - lifecycle_state: Current lifecycle status
+
+  ## Target Resource Types:
+  - network_interface: Attached to instance network interface
+  - public_gateway: Attached to public gateway for subnet internet access
+  - vpn_gateway: Attached to VPN gateway for VPN connectivity
+  - null: Unassigned (reserved but not attached)
+
+  ## Floating IP Status Values:
+  - available: IP is assigned and ready
+  - pending: IP is being created
+  - deleting: IP is being deleted
+  - failed: IP allocation failed
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 404: Floating IP not found
+  - 400: Invalid ID format
+
+  ## Use Cases:
+  - Public internet access for specific instances
+  - High availability failover IPs
+  - VPN gateway connectivity
+  - Public gateway routing for subnets
+}

@@ -1,0 +1,134 @@
+meta {
+  name: Get Subnet by ID
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/subnets/:subnet_id?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:path {
+  subnet_id: {{subnet_id}}
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const subnet = res.body;
+    console.log(`\n=== Subnet Details ===`);
+    console.log(`Name: ${subnet.name}`);
+    console.log(`ID: ${subnet.id}`);
+    console.log(`Status: ${subnet.status}`);
+    console.log(`CRN: ${subnet.crn}`);
+    console.log(`Created: ${subnet.created_at}`);
+
+    console.log(`\n--- Network Configuration ---`);
+    console.log(`IPv4 CIDR: ${subnet.ipv4_cidr_block || 'N/A'}`);
+    console.log(`Available IPv4s: ${subnet.available_ipv4_address_count || 0}`);
+    console.log(`Total IPv4s: ${subnet.total_ipv4_address_count || 0}`);
+    console.log(`IP Version: ${subnet.ip_version || 'ipv4'}`);
+
+    console.log(`\n--- Location ---`);
+    console.log(`VPC: ${subnet.vpc?.name || 'N/A'} (${subnet.vpc?.id || 'N/A'})`);
+    console.log(`Zone: ${subnet.zone?.name || 'N/A'}`);
+    console.log(`Resource Group: ${subnet.resource_group?.name || 'N/A'}`);
+
+    console.log(`\n--- Routing & Security ---`);
+    console.log(`Network ACL: ${subnet.network_acl?.name || 'N/A'} (${subnet.network_acl?.id || 'N/A'})`);
+    console.log(`Routing Table: ${subnet.routing_table?.name || 'N/A'} (${subnet.routing_table?.id || 'N/A'})`);
+
+    if (subnet.public_gateway) {
+      console.log(`Public Gateway: ${subnet.public_gateway.name || 'N/A'} (${subnet.public_gateway.id || 'N/A'})`);
+    } else {
+      console.log(`Public Gateway: None (No internet access)`);
+    }
+
+    if (subnet.reserved_ips && subnet.reserved_ips.length > 0) {
+      console.log(`\n--- Reserved IPs (${subnet.reserved_ips.length}) ---`);
+      subnet.reserved_ips.forEach(ip => {
+        console.log(`  - ${ip.address || 'N/A'} (${ip.name || ip.id})`);
+        if (ip.target) {
+          console.log(`    Target: ${ip.target.resource_type}`);
+        }
+      });
+    }
+
+    console.log(`\n--- Additional Info ---`);
+    console.log(`Health State: ${subnet.health_state || 'N/A'}`);
+    console.log(`Lifecycle State: ${subnet.lifecycle_state || 'N/A'}`);
+
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  } else if (res.status === 404) {
+    console.error("Subnet not found - check the SUBNET_ID environment variable");
+  } else {
+    console.error(`Error: ${res.status} - ${res.statusText}`);
+  }
+}
+
+docs {
+  # Get Specific Subnet
+
+  Retrieves details for a single subnet by ID.
+
+  ## Usage:
+  Set SUBNET_ID environment variable and run:
+  SUBNET_ID=r006-abc123... mise run subnets:get
+
+  Or directly with Bruno CLI:
+  SUBNET_ID=r006-abc123... fnox run -- bru run auth/get-iam-token.bru vpc/subnets/get-subnet.bru --env dts
+
+  ## Response:
+  Returns detailed subnet object with:
+  - id, name, status, crn, created_at
+  - ipv4_cidr_block: IP address range
+  - available_ipv4_address_count: Free IPs
+  - total_ipv4_address_count: Total IPs in subnet
+  - vpc: Parent VPC reference
+  - zone: Availability zone
+  - network_acl: Network access control list
+  - routing_table: Routing table for subnet
+  - public_gateway: Internet gateway (if attached)
+  - reserved_ips: IP addresses reserved/in-use
+  - health_state: Overall subnet health
+  - lifecycle_state: Current lifecycle status
+
+  ## Subnet Status Values:
+  - available: Subnet is ready for use
+  - pending: Subnet is being created
+  - deleting: Subnet is being deleted
+  - failed: Subnet creation failed
+
+  ## IP Address Management:
+  - Total IPs: Based on CIDR block size
+  - Available IPs: Unallocated addresses
+  - Reserved IPs: Allocated to resources (instances, LBs, etc.)
+  - Gateway IPs: First 4 IPs reserved by IBM Cloud
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 404: Subnet not found
+  - 400: Invalid ID format
+
+  ## Use Cases:
+  - Check IP address availability before provisioning
+  - Verify public gateway attachment for internet access
+  - Review network ACL and routing table assignments
+  - Monitor subnet health and lifecycle state
+}
