@@ -7,7 +7,7 @@ A Git-friendly API collection for the IBM Cloud VPC REST API using [Bruno](https
 This collection provides ready-to-use API requests for managing IBM Cloud VPC infrastructure via the command line. All requests are stored as `.bru` files, making them:
 - ✅ **Version control friendly** - Plain text files you can commit to Git
 - ✅ **CLI-first** - Run from terminal using `bru` or `mise` commands
-- ✅ **Automated** - Integrated with `fnox` for secret management and `mise` for task automation
+- ✅ **Simple setup** - Just set environment variables and go
 - ✅ **Self-documenting** - Each request includes comprehensive documentation
 
 ## What's Included
@@ -27,53 +27,73 @@ This collection provides ready-to-use API requests for managing IBM Cloud VPC in
 
 ## Prerequisites
 
-You'll need the following tools installed:
+### Required
 
 1. **Bruno CLI** - API client
    ```bash
    npm install -g @usebruno/cli
    ```
 
-2. **fnox** - Secret management (encrypted environment variables)
-   ```bash
-   # Install from: https://github.com/anthropics/fnox
-   ```
+2. **IBM Cloud API Key** - Create one at [IBM Cloud IAM](https://cloud.ibm.com/iam/apikeys)
 
-3. **mise** - Task runner (optional but recommended)
+### Optional (But Recommended)
+
+3. **mise** - Task runner for one-command execution
    ```bash
    # Install from: https://mise.jdx.dev/getting-started.html
    ```
 
-4. **IBM Cloud API Key** - Create one at [IBM Cloud IAM](https://cloud.ibm.com/iam/apikeys)
+4. **fnox** - Encrypted secret management (alternative to plain environment variables)
+   ```bash
+   # Install from: https://github.com/anthropics/fnox
+   ```
 
 ## Quick Start
 
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/greyhoundforty/bruno-ibm-cloud-vpc.git
 cd bruno-ibm-cloud-vpc
 ```
 
 ### 2. Configure Your API Key
 
-Store your IBM Cloud API key securely using fnox:
+**Option A: Using Environment Variables (Simplest)**
+
+```bash
+export DTS_IBM_API_KEY="your-ibm-cloud-api-key-here"
+```
+
+To make it permanent, add to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.):
+```bash
+echo 'export DTS_IBM_API_KEY="your-ibm-cloud-api-key-here"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**Option B: Using fnox (Encrypted Secret Management)**
 
 ```bash
 fnox set DTS_IBM_API_KEY your-ibm-cloud-api-key-here
 ```
 
-Verify it's stored:
+Then use `fnox run --` prefix for all commands:
 ```bash
-fnox list
+fnox run -- mise run auth
 ```
 
 ### 3. Test Authentication
 
 Get an IAM bearer token (valid for 1 hour):
 
+**With mise (recommended):**
 ```bash
 mise run auth
+```
+
+**With Bruno CLI directly:**
+```bash
+bru run auth/get-iam-token.bru --env dts
 ```
 
 You should see:
@@ -84,8 +104,14 @@ Token expires in: 3600 seconds
 
 ### 4. List Your VPCs
 
+**With mise:**
 ```bash
 mise run vpc:list
+```
+
+**With Bruno CLI:**
+```bash
+bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env dts
 ```
 
 You should see all VPCs in your IBM Cloud account with names, IDs, and status.
@@ -116,20 +142,22 @@ SUBNET_ID=r006-mno678... mise run subnets:get
 
 ### Using Bruno CLI Directly
 
-If you prefer direct Bruno commands:
+If you prefer direct Bruno commands without mise:
 
 ```bash
 # Authenticate first
-fnox run -- bru run auth/get-iam-token.bru --env dts
+bru run auth/get-iam-token.bru --env dts
 
 # Run any endpoint (must authenticate first!)
-fnox run -- bru run vpc/list-vpcs.bru --env dts
+bru run vpc/list-vpcs.bru --env dts
 
-# Run multiple requests in one command (auth + request)
-fnox run -- bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env dts
+# Run multiple requests in one command (auth + request) - RECOMMENDED
+bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env dts
 ```
 
-**Important**: Always prefix with `fnox run --` to inject your API key.
+**Important**:
+- Make sure `DTS_IBM_API_KEY` environment variable is set
+- Running multiple files (auth + request) in one command is recommended so the bearer token persists
 
 ### Common Workflow Examples
 
@@ -225,13 +253,13 @@ bruno-ibm-cloud-vpc/
 
 The `environments/dts.bru` file contains:
 
-- `ibm_api_key` - Your IBM Cloud API key (from `fnox`)
+- `ibm_api_key` - Your IBM Cloud API key (from `DTS_IBM_API_KEY` environment variable)
 - `region` - IBM Cloud region (default: `us-south`)
 - `vpc_endpoint` - VPC API endpoint (auto-constructed)
 - `iam_endpoint` - IAM token endpoint
 - `bearer_token` - Auto-populated after authentication
 - `api_version` - IBM Cloud VPC API version (current: `2024-12-10`)
-- Resource IDs - `vpc_id`, `security_group_id`, `instance_id`, etc.
+- Resource IDs - `vpc_id`, `security_group_id`, `instance_id`, etc. (passed via environment variables)
 
 ## IBM Cloud Regions
 
@@ -248,7 +276,7 @@ Available regions you can set in `environments/dts.bru`:
 
 ## Authentication Flow
 
-1. **API Key** → Stored securely in `fnox`
+1. **API Key** → Set in `DTS_IBM_API_KEY` environment variable
 2. **POST** to `https://iam.cloud.ibm.com/identity/token`
 3. **Receive** Bearer token (valid 1 hour)
 4. **Use** token in `Authorization: Bearer {token}` header for all VPC API calls
@@ -311,11 +339,15 @@ mise run auth
 
 ### API Key Not Found
 ```bash
-# Verify fnox has your API key
-fnox list
+# Check if environment variable is set
+echo $DTS_IBM_API_KEY
 
-# If missing, add it
-fnox set DTS_IBM_API_KEY your-api-key-here
+# If empty, set it
+export DTS_IBM_API_KEY="your-api-key-here"
+
+# Or if using fnox
+fnox list  # Verify fnox has your API key
+fnox set DTS_IBM_API_KEY your-api-key-here  # If missing
 ```
 
 ### Bruno Command Not Found
