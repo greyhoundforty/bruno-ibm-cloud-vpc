@@ -62,19 +62,19 @@ cd bruno-ibm-cloud-vpc
 **Option A: Using Environment Variables (Simplest)**
 
 ```bash
-export DTS_IBM_API_KEY="your-ibm-cloud-api-key-here"
+export IBM_API_KEY="your-ibm-cloud-api-key-here"
 ```
 
 To make it permanent, add to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.):
 ```bash
-echo 'export DTS_IBM_API_KEY="your-ibm-cloud-api-key-here"' >> ~/.bashrc
+echo 'export IBM_API_KEY="your-ibm-cloud-api-key-here"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
 **Option B: Using fnox (Encrypted Secret Management)**
 
 ```bash
-fnox set DTS_IBM_API_KEY your-ibm-cloud-api-key-here
+fnox set IBM_API_KEY your-ibm-cloud-api-key-here
 ```
 
 Then use `fnox run --` prefix for all commands:
@@ -93,7 +93,7 @@ mise run auth
 
 **With Bruno CLI directly:**
 ```bash
-bru run auth/get-iam-token.bru --env dts
+bru run auth/get-iam-token.bru --env prod
 ```
 
 You should see:
@@ -111,7 +111,7 @@ mise run vpc:list
 
 **With Bruno CLI:**
 ```bash
-bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env dts
+bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod
 ```
 
 You should see all VPCs in your IBM Cloud account with names, IDs, and status.
@@ -146,17 +146,17 @@ If you prefer direct Bruno commands without mise:
 
 ```bash
 # Authenticate first
-bru run auth/get-iam-token.bru --env dts
+bru run auth/get-iam-token.bru --env prod
 
 # Run any endpoint (must authenticate first!)
-bru run vpc/list-vpcs.bru --env dts
+bru run vpc/list-vpcs.bru --env prod
 
 # Run multiple requests in one command (auth + request) - RECOMMENDED
-bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env dts
+bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod
 ```
 
 **Important**:
-- Make sure `DTS_IBM_API_KEY` environment variable is set
+- Make sure `IBM_API_KEY` environment variable is set
 - Running multiple files (auth + request) in one command is recommended so the bearer token persists
 
 ### Common Workflow Examples
@@ -226,7 +226,8 @@ bruno-ibm-cloud-vpc/
 ├── bruno.json                      # Collection metadata
 ├── .mise.toml                      # Task automation configuration
 ├── environments/
-│   └── dts.bru                     # Environment variables (region, endpoints, IDs)
+│   ├── prod.bru                    # Production environment (default)
+│   └── dev.bru                     # Development environment
 ├── auth/
 │   └── get-iam-token.bru           # IAM authentication
 └── vpc/
@@ -251,9 +252,20 @@ bruno-ibm-cloud-vpc/
 
 ## Environment Configuration
 
-The `environments/dts.bru` file contains:
+Two environment files are provided:
 
-- `ibm_api_key` - Your IBM Cloud API key (from `DTS_IBM_API_KEY` environment variable)
+### Production Environment (`environments/prod.bru`) - Default
+- Used by default in all mise tasks (`--env prod`)
+- Configure for your production IBM Cloud account
+
+### Development Environment (`environments/dev.bru`)
+- Alternative environment for testing
+- Use by specifying `--env dev` in Bruno CLI commands
+- Example: `bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env dev`
+
+Both environment files contain:
+
+- `ibm_api_key` - Your IBM Cloud API key (from `IBM_API_KEY` environment variable)
 - `region` - IBM Cloud region (default: `us-south`)
 - `vpc_endpoint` - VPC API endpoint (auto-constructed)
 - `iam_endpoint` - IAM token endpoint
@@ -263,7 +275,7 @@ The `environments/dts.bru` file contains:
 
 ## IBM Cloud Regions
 
-Available regions you can set in `environments/dts.bru`:
+Available regions you can configure in environment files (`environments/prod.bru` or `environments/dev.bru`):
 - `us-south` (Dallas)
 - `us-east` (Washington DC)
 - `eu-gb` (London)
@@ -276,7 +288,7 @@ Available regions you can set in `environments/dts.bru`:
 
 ## Authentication Flow
 
-1. **API Key** → Set in `DTS_IBM_API_KEY` environment variable
+1. **API Key** → Set in `IBM_API_KEY` environment variable
 2. **POST** to `https://iam.cloud.ibm.com/identity/token`
 3. **Receive** Bearer token (valid 1 hour)
 4. **Use** token in `Authorization: Bearer {token}` header for all VPC API calls
@@ -340,14 +352,14 @@ mise run auth
 ### API Key Not Found
 ```bash
 # Check if environment variable is set
-echo $DTS_IBM_API_KEY
+echo $IBM_API_KEY
 
 # If empty, set it
-export DTS_IBM_API_KEY="your-api-key-here"
+export IBM_API_KEY="your-api-key-here"
 
 # Or if using fnox
 fnox list  # Verify fnox has your API key
-fnox set DTS_IBM_API_KEY your-api-key-here  # If missing
+fnox set IBM_API_KEY your-api-key-here  # If missing
 ```
 
 ### Bruno Command Not Found
@@ -361,8 +373,9 @@ bru --version
 
 ### Resource Not Found (404)
 - Double-check the resource ID (copy from list command output)
-- Verify you're in the correct region (check `environments/dts.bru`)
+- Verify you're in the correct region (check `environments/prod.bru` or `environments/dev.bru`)
 - Ensure the resource exists in your IBM Cloud account
+- Make sure you're using the correct environment (`--env prod` or `--env dev`)
 
 ### Bruno Parsing Errors
 Bruno has strict syntax rules:

@@ -1,57 +1,61 @@
 # Bruno API Collection Tasks for IBM Cloud VPC
 #
 # Prerequisites:
-# - Set DTS_IBM_API_KEY environment variable with your IBM Cloud API key
-# - Example: export DTS_IBM_API_KEY="your-api-key-here"
+# - Set IBM_API_KEY environment variable with your IBM Cloud API key
+# - Example: export IBM_API_KEY="your-api-key-here"
+#
+# Environment:
+# - Default: --env prod (uses environments/prod.bru)
+# - Alternative: --env dev (uses environments/dev.bru)
 
 [tasks.auth]
 description = "Get IBM Cloud IAM token"
-run = "bru run auth/get-iam-token.bru --env dts"
+run = "bru run auth/get-iam-token.bru --env prod"
 
 [tasks."vpc:list"]
 description = "List all VPCs"
-run = "bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod"
 
 [tasks."vpc:get"]
 description = "Get specific VPC by ID (set VPC_ID env var)"
-run = "bru run auth/get-iam-token.bru vpc/get-vpc.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/get-vpc.bru --env prod"
 
 [tasks."subnets:list"]
 description = "List all subnets"
-run = "bru run auth/get-iam-token.bru vpc/subnets/list-subnets.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/subnets/list-subnets.bru --env prod"
 
 [tasks."security-groups:list"]
 description = "List all security groups"
-run = "bru run auth/get-iam-token.bru vpc/security-groups/list-security-groups.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/security-groups/list-security-groups.bru --env prod"
 
 [tasks."instances:list"]
 description = "List all instances (VSIs)"
-run = "bru run auth/get-iam-token.bru vpc/instances/list-instances.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/instances/list-instances.bru --env prod"
 
 [tasks."floating-ips:list"]
 description = "List all floating IPs"
-run = "bru run auth/get-iam-token.bru vpc/floating-ips/list-floating-ips.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/floating-ips/list-floating-ips.bru --env prod"
 
 [tasks."load-balancers:list"]
 description = "List all load balancers"
-run = "bru run auth/get-iam-token.bru vpc/load-balancers/list-load-balancers.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/load-balancers/list-load-balancers.bru --env prod"
 
 [tasks."security-groups:get"]
 description = "Get specific security group by ID (set SECURITY_GROUP_ID env var)"
-run = "bru run auth/get-iam-token.bru vpc/security-groups/get-security-group.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/security-groups/get-security-group.bru --env prod"
 
 [tasks."instances:get"]
 description = "Get specific instance by ID (set INSTANCE_ID env var)"
-run = "bru run auth/get-iam-token.bru vpc/instances/get-instance.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/instances/get-instance.bru --env prod"
 
 [tasks."floating-ips:get"]
 description = "Get specific floating IP by ID (set FLOATING_IP_ID env var)"
-run = "bru run auth/get-iam-token.bru vpc/floating-ips/get-floating-ip.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/floating-ips/get-floating-ip.bru --env prod"
 
 [tasks."load-balancers:get"]
 description = "Get specific load balancer by ID (set LOAD_BALANCER_ID env var)"
-run = "bru run auth/get-iam-token.bru vpc/load-balancers/get-load-balancer.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/load-balancers/get-load-balancer.bru --env prod"
 
 [tasks."subnets:get"]
 description = "Get specific subnet by ID (set SUBNET_ID env var)"
-run = "bru run auth/get-iam-token.bru vpc/subnets/get-subnet.bru --env dts"
+run = "bru run auth/get-iam-token.bru vpc/subnets/get-subnet.bru --env prod"
