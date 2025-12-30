@@ -20,6 +20,10 @@ run = "bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod"
 description = "Get specific VPC by ID (set VPC_ID env var)"
 run = "bru run auth/get-iam-token.bru vpc/get-vpc.bru --env prod"
 
+[tasks."vpc:create"]
+description = "Create new VPC (set NEW_VPC_NAME, optionally RESOURCE_GROUP_ID)"
+run = "bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod --output json"
+
 [tasks."subnets:list"]
 description = "List all subnets"
 run = "bru run auth/get-iam-token.bru vpc/subnets/list-subnets.bru --env prod"

@@ -1,0 +1,193 @@
+meta {
+  name: Create VPC
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{vpc_endpoint}}/v1/vpcs?version={{api_version}}&generation=2
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+body:json {
+  {
+    "name": "{{NEW_VPC_NAME}}",
+    "resource_group": {
+      "id": "{{RESOURCE_GROUP_ID}}"
+    },
+    "address_prefix_management": "auto"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const vpc = res.body;
+    console.log(`\n✅ VPC Created Successfully!`);
+    console.log(`\n=== VPC Details ===`);
+    console.log(`Name: ${vpc.name}`);
+    console.log(`ID: ${vpc.id}`);
+    console.log(`Status: ${vpc.status}`);
+    console.log(`CRN: ${vpc.crn}`);
+    console.log(`Created: ${vpc.created_at}`);
+
+    console.log(`\n--- Location & Organization ---`);
+    console.log(`Region: ${vpc.region?.name || 'N/A'}`);
+    console.log(`Resource Group: ${vpc.resource_group?.name || 'N/A'} (${vpc.resource_group?.id || 'N/A'})`);
+
+    console.log(`\n--- Default Resources (Auto-Created) ---`);
+    console.log(`Default Security Group:`);
+    console.log(`  Name: ${vpc.default_security_group?.name || 'N/A'}`);
+    console.log(`  ID: ${vpc.default_security_group?.id || 'N/A'}`);
+    console.log(`Default Network ACL:`);
+    console.log(`  Name: ${vpc.default_network_acl?.name || 'N/A'}`);
+    console.log(`  ID: ${vpc.default_network_acl?.id || 'N/A'}`);
+    console.log(`Default Routing Table:`);
+    console.log(`  Name: ${vpc.default_routing_table?.name || 'N/A'}`);
+    console.log(`  ID: ${vpc.default_routing_table?.id || 'N/A'}`);
+
+    if (vpc.cse_source_ips && vpc.cse_source_ips.length > 0) {
+      console.log(`\n--- Cloud Service Endpoint Source IPs ---`);
+      vpc.cse_source_ips.forEach(cse => {
+        console.log(`  Zone ${cse.zone?.name || 'N/A'}: ${cse.ip?.address || 'Not allocated'}`);
+      });
+    }
+
+    console.log(`\n--- Next Steps ---`);
+    console.log(`1. Create subnets in this VPC:`);
+    console.log(`   VPC_ID=${vpc.id} NEW_SUBNET_NAME="my-subnet" ZONE_NAME="us-south-1" SUBNET_CIDR="10.240.0.0/24" mise run subnets:create`);
+    console.log(`2. List this VPC:`);
+    console.log(`   VPC_ID=${vpc.id} mise run vpc:get`);
+    console.log(`3. Delete this VPC (when done testing):`);
+    console.log(`   VPC_ID=${vpc.id} mise run vpc:delete`);
+
+    console.log(`\n💡 Tip: Use --output json flag to see full JSON response`);
+
+  } else if (res.status === 400) {
+    console.error(`\n❌ Bad Request (400)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid request parameters'}`);
+    console.error(`\nCheck:`);
+    console.error(`- VPC name is unique and valid`);
+    console.error(`- Resource group ID is correct (or omit to use default)`);
+  } else if (res.status === 401) {
+    console.error("\n❌ Token expired - run 'mise run auth' again");
+  } else if (res.status === 409) {
+    console.error(`\n❌ Conflict (409)`);
+    console.error(`A VPC with name "${NEW_VPC_NAME}" already exists`);
+    console.error(`Choose a different name or delete the existing VPC`);
+  } else if (res.status === 422) {
+    console.error(`\n❌ Validation Error (422)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid parameters'}`);
+  } else {
+    console.error(`\n❌ Error: ${res.status} - ${res.statusText}`);
+  }
+}
+
+docs {
+  # Create VPC
+
+  Creates a new Virtual Private Cloud (VPC) in IBM Cloud.
+
+  ## Prerequisites:
+  - Valid IBM Cloud API key (IBM_API_KEY environment variable)
+  - Resource group ID (optional, will use default if not specified)
+
+  ## Environment Variables Required:
+  - NEW_VPC_NAME: Name for the new VPC (e.g., "my-vpc")
+  - RESOURCE_GROUP_ID: Resource group ID (optional)
+
+  ## Request Body Fields:
+
+  ### Required:
+  - name (string): VPC name (must be unique within account)
+
+  ### Optional:
+  - resource_group.id (string): Resource group for the VPC
+  - address_prefix_management (string): "auto" (default) or "manual"
+    - auto: IBM Cloud automatically creates address prefixes
+    - manual: You must manually create address prefixes
+  - classic_access (boolean): Enable access to classic infrastructure (default: false)
+
+  ## Usage Examples:
+
+  ### With mise (recommended):
+  ```bash
+  NEW_VPC_NAME="my-test-vpc" RESOURCE_GROUP_ID="abc123..." mise run vpc:create
+  ```
+
+  ### With Bruno CLI:
+  ```bash
+  NEW_VPC_NAME="my-test-vpc" RESOURCE_GROUP_ID="abc123..." \
+    bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod --output json
+  ```
+
+  ### Get your resource group ID:
+  ```bash
+  # List all resource groups
+  ibmcloud resource groups --output json | jq -r '.[0].id'
+  ```
+
+  ## Response (201 Created):
+  Returns the created VPC object with:
+  - id: VPC ID (starts with r006-)
+  - name: VPC name
+  - status: Current status (pending, available, deleting, failed)
+  - crn: Cloud Resource Name
+  - created_at: Creation timestamp
+  - default_network_acl: Default network ACL details
+  - default_security_group: Default security group details
+  - default_routing_table: Default routing table details
+  - cse_source_ips: Cloud Service Endpoint source IPs per zone
+
+  ## Common Status Codes:
+  - 201: VPC created successfully
+  - 400: Invalid request (check VPC name, parameters)
+  - 401: Authentication failed (check bearer token)
+  - 409: VPC name already exists
+  - 422: Validation error (invalid parameters)
+
+  ## Next Steps After Creation:
+  1. Save the VPC ID from the response
+  2. Create subnets in the VPC
+  3. Create security groups
+  4. Provision instances
+
+  ## Example Response:
+  ```json
+  {
+    "id": "r006-abc123...",
+    "name": "my-test-vpc",
+    "status": "available",
+    "resource_group": {
+      "id": "xyz789...",
+      "name": "Default"
+    },
+    "created_at": "2024-12-30T10:30:00Z",
+    "default_network_acl": {
+      "id": "r006-def456...",
+      "name": "default-acl"
+    },
+    "default_security_group": {
+      "id": "r006-ghi789...",
+      "name": "default-sg"
+    }
+  }
+  ```
+
+  ## API Reference:
+  https://cloud.ibm.com/apidocs/vpc/latest#create-vpc
+}

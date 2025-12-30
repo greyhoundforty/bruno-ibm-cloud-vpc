@@ -34,3 +34,6 @@ yarn-error.log*
 # Temporary files
 *.tmp
 *.temp
+
+# Prompt extraction (temporary context files)
+.prompt-extraction/
