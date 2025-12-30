@@ -350,16 +350,32 @@ When generating new `.bru` files or Python scripts:
 - **Created comprehensive README.md**: Complete getting started guide with prerequisites, setup, usage examples
 - **Repository ready**: All files documented and ready for GitHub publication
 
+### 2024-12-30 - fnox Made Optional & Naming Standardization
+- **Removed fnox dependency from mise tasks**: All tasks now use plain `bru` commands instead of `fnox run --`
+- **Made fnox optional**: Restructured README with Required vs Optional sections, fnox now optional for encrypted secrets
+- **Primary method uses export**: Standard `export IBM_API_KEY="..."` approach for environment variables
+- **Updated all documentation**: Quick Start, Usage, Troubleshooting sections show both export and fnox methods
+- **Testing verified**: All mise tasks work with plain environment variables (no fnox required)
+- **Standardized environment variable naming**: Changed `DTS_IBM_API_KEY` → `IBM_API_KEY` (more intuitive)
+- **Standardized environment file naming**: Renamed `dts.bru` → `prod.bru` and `natl.bru` → `dev.bru`
+- **Updated all configuration**: .mise.toml now uses `--env prod` by default, both environment files use `IBM_API_KEY`
+- **Clear dev/prod separation**: Added documentation explaining prod.bru (default) vs dev.bru (alternative)
+- **Repository accessibility improved**: Lower barrier to entry, no need to install/learn fnox to get started
+- **All changes committed and pushed**: 3 commits total, repository fully updated
+
 ## What Worked
 
 ✅ **Bruno post-response scripts**: JavaScript formatting works perfectly for displaying API responses
 ✅ **Environment variable passing**: `process.env.VPC_ID` pattern works seamlessly for dynamic IDs
 ✅ **Mise task automation**: Single command execution with auto-authentication is very smooth
-✅ **fnox integration**: Secret management works flawlessly, no credentials in files
+✅ **Optional fnox integration**: Works great when needed, but not required for basic usage
 ✅ **Bruno CLI**: Multi-file execution (auth + request) preserves bearer token across requests
 ✅ **Comprehensive output**: Post-response scripts provide much better UX than raw JSON
 ✅ **Directory structure**: Organized by resource type makes navigation intuitive
 ✅ **Documentation in docs blocks**: Keeps .bru files self-documenting
+✅ **Standard naming conventions**: `IBM_API_KEY`, `prod.bru`, `dev.bru` are more intuitive than custom names
+✅ **Git-friendly plain text**: All .bru files are human-readable and easy to version control
+✅ **GitHub integration**: gh CLI makes repository creation and management seamless
 
 ## What Didn't Work / Challenges
 
@@ -369,37 +385,198 @@ When generating new `.bru` files or Python scripts:
 
 ## Next Steps for Next Session
 
-### Immediate Priorities
+### ✅ Completed in This Session
 
-1. **Create POST/PUT endpoints** for resource creation:
-   - Create VPC
-   - Create subnet with CIDR calculation
-   - Create security group with rules
-   - Provision VSI (virtual server instance)
-   - Create floating IP and attach to instance
+- ✅ All 13 GET endpoints (1 auth + 6 list + 6 get)
+- ✅ Comprehensive README.md and documentation
+- ✅ GitHub repository created and published
+- ✅ fnox made optional (not required)
+- ✅ Standardized naming (IBM_API_KEY, prod.bru, dev.bru)
+- ✅ Mise task automation for all read operations
 
-2. **Add DELETE endpoints** for resource cleanup:
-   - Delete floating IP
-   - Delete instance
-   - Delete subnet
-   - Delete security group
-   - Delete VPC
+### 🎯 Session 2: Resource Creation (POST Endpoints)
 
-3. **Advanced filtering examples**:
-   - Add .bru files demonstrating query parameter filters
-   - Filter subnets by VPC ID
-   - Filter instances by zone
-   - Filter by resource group
+**Goal**: Implement POST endpoints for creating VPC resources with proper request bodies and validation.
 
-4. **Pagination handling**:
-   - Add examples for large result sets
-   - Implement `limit` and `start` parameters
-   - Show how to follow `next.href` links
+**Priority Order** (following VPC dependency chain):
 
-5. **Error handling improvements**:
-   - Add retry logic for rate limiting
-   - Better error messages in post-response scripts
-   - Validation scripts for required parameters
+#### 1. Create VPC (`vpc/create-vpc.bru`)
+**IBM Cloud API**: `POST /v1/vpcs`
+**Required Body Parameters**:
+- `name` (string): VPC name
+- `resource_group.id` (string, optional): Resource group ID
+- `address_prefix_management` (string, optional): "auto" or "manual"
+- `classic_access` (boolean, optional): Enable classic infrastructure access
+
+**Implementation Plan**:
+- Use `body:json` block in .bru file
+- Add environment variables: `NEW_VPC_NAME`, `RESOURCE_GROUP_ID`
+- Post-response script: Extract VPC ID and save to environment
+- Success output: Display VPC ID, name, default security group, network ACL
+- Mise task: `vpc:create`
+
+**Example JSON Body**:
+```json
+{
+  "name": "{{NEW_VPC_NAME}}",
+  "resource_group": {
+    "id": "{{RESOURCE_GROUP_ID}}"
+  },
+  "address_prefix_management": "auto"
+}
+```
+
+#### 2. Create Subnet (`vpc/subnets/create-subnet.bru`)
+**IBM Cloud API**: `POST /v1/subnets`
+**Required Body Parameters**:
+- `name` (string): Subnet name
+- `vpc.id` (string): Parent VPC ID
+- `zone.name` (string): Zone (e.g., "us-south-1")
+- `ipv4_cidr_block` (string): IP range (e.g., "10.240.0.0/24")
+
+**Implementation Plan**:
+- Requires VPC ID from previous create-vpc or list-vpcs
+- Add CIDR validation helper in docs block
+- Environment variables: `NEW_SUBNET_NAME`, `VPC_ID`, `ZONE_NAME`, `SUBNET_CIDR`
+- Post-response script: Display subnet details with available IP count
+- Mise task: `subnets:create`
+
+**CIDR Helper Notes** (in docs block):
+- /24 = 256 IPs (251 usable, 5 reserved by IBM)
+- /25 = 128 IPs (123 usable)
+- /26 = 64 IPs (59 usable)
+
+#### 3. Create Security Group (`vpc/security-groups/create-security-group.bru`)
+**IBM Cloud API**: `POST /v1/security_groups`
+**Required Body Parameters**:
+- `name` (string): Security group name
+- `vpc.id` (string): Parent VPC ID
+- `resource_group.id` (string, optional): Resource group ID
+
+**Implementation Plan**:
+- Create security group first (empty rules)
+- Separate endpoint for adding rules: `create-security-group-rule.bru`
+- Environment variables: `NEW_SG_NAME`, `VPC_ID`
+- Post-response script: Display group ID and default rules
+- Mise task: `security-groups:create`
+
+#### 4. Create Security Group Rule (`vpc/security-groups/create-security-group-rule.bru`)
+**IBM Cloud API**: `POST /v1/security_groups/{security_group_id}/rules`
+**Required Body Parameters**:
+- `direction` (string): "inbound" or "outbound"
+- `protocol` (string): "tcp", "udp", "icmp", or "all"
+- `ip_version` (string): "ipv4" (default)
+- `remote` (string or object): CIDR block or security group ID
+
+**For TCP/UDP**:
+- `port_min` (integer): Starting port
+- `port_max` (integer): Ending port
+
+**Implementation Plan**:
+- Create pre-defined rule templates (SSH, HTTP, HTTPS, All Outbound)
+- Environment variables: `SECURITY_GROUP_ID`, `RULE_DIRECTION`, `RULE_PROTOCOL`, `REMOTE_CIDR`
+- Post-response script: Display created rule details
+- Mise tasks: `security-groups:add-ssh`, `security-groups:add-http`, `security-groups:add-https`
+
+**Example Rule Templates**:
+```json
+// SSH (port 22)
+{
+  "direction": "inbound",
+  "protocol": "tcp",
+  "port_min": 22,
+  "port_max": 22,
+  "remote": {"cidr_block": "0.0.0.0/0"}
+}
+
+// HTTP (port 80)
+{
+  "direction": "inbound",
+  "protocol": "tcp",
+  "port_min": 80,
+  "port_max": 80,
+  "remote": {"cidr_block": "0.0.0.0/0"}
+}
+
+// All outbound
+{
+  "direction": "outbound",
+  "protocol": "all",
+  "remote": {"cidr_block": "0.0.0.0/0"}
+}
+```
+
+#### 5. Create Floating IP (`vpc/floating-ips/create-floating-ip.bru`)
+**IBM Cloud API**: `POST /v1/floating_ips`
+**Required Body Parameters**:
+- `name` (string): Floating IP name
+- `zone.name` (string): Zone
+- `target` (object, optional): Network interface to attach
+
+**Implementation Plan**:
+- Two modes: unattached (reserve) or attached (to instance NIC)
+- Environment variables: `NEW_FIP_NAME`, `ZONE_NAME`, `TARGET_NETWORK_INTERFACE_ID`
+- Post-response script: Display IP address and attachment status
+- Mise tasks: `floating-ips:create` (unattached), `floating-ips:create-and-attach`
+
+#### 6. Create Instance (VSI) (`vpc/instances/create-instance.bru`)
+**IBM Cloud API**: `POST /v1/instances`
+**Most Complex - Required Body Parameters**:
+- `name` (string): Instance name
+- `vpc.id` (string): Parent VPC ID
+- `zone.name` (string): Zone
+- `profile.name` (string): Instance profile (e.g., "cx2-2x4")
+- `image.id` (string): OS image ID
+- `primary_network_interface`:
+  - `subnet.id` (string): Subnet ID
+  - `security_groups[]` (array): Security group IDs
+- `keys[]` (array): SSH key IDs
+
+**Implementation Plan**:
+- Requires pre-existing: VPC, subnet, security group, SSH key
+- Create helper endpoint: `list-instance-profiles.bru`, `list-images.bru`
+- Environment variables: `NEW_INSTANCE_NAME`, `VPC_ID`, `ZONE_NAME`, `PROFILE_NAME`, `IMAGE_ID`, `SUBNET_ID`, `SECURITY_GROUP_ID`, `SSH_KEY_ID`
+- Post-response script: Display instance ID, private IP, status
+- Mise task: `instances:create`
+
+**Recommended Profile**: `cx2-2x4` (2 vCPU, 4 GB RAM)
+
+### 🎯 Session 3: Resource Deletion (DELETE Endpoints)
+
+**Priority Order** (reverse of creation to handle dependencies):
+
+1. ✅ **Delete Instance** (`instances/delete-instance.bru`)
+2. ✅ **Delete Floating IP** (`floating-ips/delete-floating-ip.bru`)
+3. ✅ **Delete Subnet** (`subnets/delete-subnet.bru`)
+4. ✅ **Delete Security Group** (`security-groups/delete-security-group.bru`)
+5. ✅ **Delete VPC** (`vpc/delete-vpc.bru`)
+
+**Common Pattern for All DELETE Endpoints**:
+- Method: `DELETE`
+- URL: `/v1/{resource}/{id}`
+- Query params: `version`, `generation`
+- No request body
+- Response: 204 No Content (success) or 404 Not Found
+- Post-response script: Verify deletion with helpful message
+- Add safety checks: confirm resource exists before deletion
+
+### 🎯 Session 4: Advanced Features
+
+#### Filtering Examples
+- ✅ Filter subnets by VPC ID
+- ✅ Filter instances by zone
+- ✅ Filter by resource group
+- ✅ Combine multiple filters
+
+#### Pagination Handling
+- ✅ Implement `limit` and `start` parameters
+- ✅ Follow `next.href` links
+- ✅ Show pagination in post-response scripts
+
+#### Error Handling
+- ✅ Retry logic for rate limiting
+- ✅ Better error messages
+- ✅ Request validation
 
 ### Long-term Enhancements
 
@@ -418,20 +595,45 @@ Before starting next session:
 3. ✅ Test all 6 get endpoints with sample IDs
 4. ✅ Check IBM Cloud VPC API docs for latest `api_version`
 
-### Command Reference for Next Session
+### Command Reference for Next Session (Resource Creation)
 
 ```bash
 # Quick smoke test
 mise run auth && mise run vpc:list
 
-# Test get endpoints (use IDs from list commands)
-VPC_ID=$(mise run vpc:list | grep -o "r006-[a-f0-9-]*" | head -1)
-VPC_ID=$VPC_ID mise run vpc:get
+# Get resource group ID (needed for VPC creation)
+bru run auth/get-iam-token.bru --env prod --output json | jq -r '.body.resource_groups[0].id'
 
-# Add new endpoints
+# Create new POST endpoint files (Session 2 focus)
 touch vpc/create-vpc.bru
+touch vpc/subnets/create-subnet.bru
+touch vpc/security-groups/create-security-group.bru
+touch vpc/security-groups/create-security-group-rule.bru
+touch vpc/floating-ips/create-floating-ip.bru
 touch vpc/instances/create-instance.bru
 
-# Update mise tasks
+# Helper endpoints for instance creation
+touch vpc/instances/list-instance-profiles.bru
+touch vpc/instances/list-images.bru
+
+# Update environment variables (add to prod.bru and dev.bru)
+# NEW_VPC_NAME, RESOURCE_GROUP_ID, NEW_SUBNET_NAME, ZONE_NAME, SUBNET_CIDR
+# NEW_SG_NAME, NEW_FIP_NAME, NEW_INSTANCE_NAME, PROFILE_NAME, IMAGE_ID
+
+# Update mise tasks in .mise.toml
 vim .mise.toml
+# Add: vpc:create, subnets:create, security-groups:create, etc.
+
+# Test POST endpoint pattern
+bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod
 ```
+
+### Session 2 Starting Checklist
+
+Before implementing POST endpoints:
+1. ✅ Verify all existing GET endpoints still work
+2. ✅ Get resource group ID from your IBM Cloud account
+3. ✅ Review IBM Cloud VPC API docs for POST endpoint structures
+4. ✅ Decide on naming convention for new resources (e.g., "bruno-test-vpc")
+5. ✅ Have test VPC/subnet/security group IDs ready for cleanup
+6. ✅ Consider creating a "test" resource group for Bruno-created resources
