@@ -44,6 +44,30 @@ run = "bru run auth/get-iam-token.bru vpc/subnets/create-subnet-by-cidr.bru --en
 description = "Create security group (set NEW_SG_NAME, VPC_ID)"
 run = "bru run auth/get-iam-token.bru vpc/security-groups/create-security-group.bru --env prod"
 
+[tasks."security-groups:add-self"]
+description = "Add self-reference inbound rule (set SECURITY_GROUP_ID)"
+run = "bru run auth/get-iam-token.bru vpc/security-groups/add-rule-self.bru --env prod"
+
+[tasks."security-groups:add-outbound"]
+description = "Add outbound all rule (set SECURITY_GROUP_ID)"
+run = "bru run auth/get-iam-token.bru vpc/security-groups/add-rule-outbound-all.bru --env prod"
+
+[tasks."security-groups:add-ssh"]
+description = "Add SSH inbound rule (set SECURITY_GROUP_ID, optionally SSH_SOURCE_CIDR)"
+run = "bru run auth/get-iam-token.bru vpc/security-groups/add-rule-ssh.bru --env prod"
+
+[tasks."security-groups:add-http"]
+description = "Add HTTP inbound rule (set SECURITY_GROUP_ID)"
+run = "bru run auth/get-iam-token.bru vpc/security-groups/add-rule-http.bru --env prod"
+
+[tasks."security-groups:add-https"]
+description = "Add HTTPS inbound rule (set SECURITY_GROUP_ID)"
+run = "bru run auth/get-iam-token.bru vpc/security-groups/add-rule-https.bru --env prod"
+
+[tasks."security-groups:add-rule"]
+description = "Add custom security group rule (set SECURITY_GROUP_ID, RULE_DIRECTION, RULE_PROTOCOL, REMOTE_CIDR)"
+run = "bru run auth/get-iam-token.bru vpc/security-groups/create-security-group-rule.bru --env prod"
+
 [tasks."subnets:list"]
 description = "List all subnets"
 run = "bru run auth/get-iam-token.bru vpc/subnets/list-subnets.bru --env prod"

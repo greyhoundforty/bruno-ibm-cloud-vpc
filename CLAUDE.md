@@ -399,6 +399,23 @@ When generating new `.bru` files or Python scripts:
 - **Subnet creation tested successfully**: 256 IP subnet created with auto-assigned CIDR block
 - **Comprehensive documentation**: Both methods fully documented with validation ranges, examples, when to use each
 
+### 2024-12-31 - Security Group Rules Implementation
+- **Created 6 security group rule endpoints**: Complete implementation of rule creation for all common use cases
+- **Self-reference rule** (`add-rule-self.bru`): Allows all inbound traffic from instances in same security group
+- **Outbound all rule** (`add-rule-outbound-all.bru`): Allows all outbound traffic to any destination (0.0.0.0/0)
+- **SSH rule** (`add-rule-ssh.bru`): Configurable SSH access (port 22) with customizable source CIDR
+- **HTTP rule** (`add-rule-http.bru`): HTTP traffic (port 80) from anywhere
+- **HTTPS rule** (`add-rule-https.bru`): HTTPS traffic (port 443) from anywhere with SSL/TLS guidance
+- **Generic rule creator** (`create-security-group-rule.bru`): Advanced custom rule creation with full parameter control
+- **Environment variables added**: RULE_DIRECTION, RULE_PROTOCOL, REMOTE_CIDR, REMOTE_SG_ID, PORT_MIN, PORT_MAX, SSH_SOURCE_CIDR, ICMP_TYPE, ICMP_CODE
+- **Mise tasks added**: 6 new tasks (security-groups:add-self, add-outbound, add-ssh, add-http, add-https, add-rule)
+- **Comprehensive documentation**: Each endpoint includes security best practices, use cases, validation, next steps
+- **Security warnings**: SSH and HTTP rules include security warnings about exposing services to internet
+- **Post-response scripts**: Detailed rule information display with protocol-specific details (ports for TCP/UDP, type/code for ICMP)
+- **Production guidance**: HTTPS rule emphasizes encryption requirements, SSL certificate setup, SEO benefits
+- **SSH security**: Multiple examples showing restrictive CIDR blocks (office IP, bastion host, VPN) vs open access
+- **Total collection**: 26 endpoints (1 auth + 2 resource group + 13 VPC read + 4 VPC create + 1 SG create + 6 SG rules)
+
 ## What Worked
 
 ✅ **Bruno post-response scripts**: JavaScript formatting works perfectly for displaying API responses

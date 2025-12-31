@@ -1,0 +1,164 @@
+meta {
+  name: Add HTTPS Rule
+  type: http
+  seq: 7
+}
+
+post {
+  url: {{vpc_endpoint}}/v1/security_groups/{{security_group_id}}/rules?version={{api_version}}&generation=2
+  body: json
+  auth: none
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+params:path {
+  security_group_id: {{security_group_id}}
+}
+
+headers {
+  Authorization: Bearer {{bearer_token}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "direction": "inbound",
+    "ip_version": "ipv4",
+    "protocol": "tcp",
+    "port_min": 443,
+    "port_max": 443,
+    "remote": {
+      "cidr_block": "0.0.0.0/0"
+    }
+  }
+}
+
+docs {
+  # Add HTTPS Inbound Rule to Security Group
+
+  Creates an inbound rule that allows HTTPS traffic (TCP port 443) from any source.
+  This is the standard for serving secure, encrypted web traffic in production.
+
+  ## Use Case
+  - Serve web applications over HTTPS (encrypted)
+  - Secure API endpoints
+  - Production web servers
+  - Any public-facing web service requiring encryption
+
+  ## Required Environment Variables
+  - `SECURITY_GROUP_ID`: The ID of the security group (e.g., r006-abc123...)
+
+  ## Usage Examples
+
+  ### With mise (recommended):
+  ```bash
+  SECURITY_GROUP_ID="r006-abc123..." mise run security-groups:add-https
+  ```
+
+  ### With Bruno CLI directly:
+  ```bash
+  export SECURITY_GROUP_ID="r006-abc123..."
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-https.bru --env prod
+  ```
+
+  ## What This Rule Does
+  - **Direction**: Inbound (incoming HTTPS requests)
+  - **Protocol**: TCP
+  - **Port**: 443 (HTTPS default port)
+  - **IP Version**: IPv4
+  - **Remote**: 0.0.0.0/0 (accepts traffic from anywhere)
+
+  ## Response
+  - **201 Created**: Rule created successfully, returns rule details with ID
+  - **400 Bad Request**: Invalid parameters (check security group ID)
+  - **404 Not Found**: Security group doesn't exist
+  - **409 Conflict**: Rule already exists (duplicate)
+
+  ## Why HTTPS?
+
+  **Security Benefits**:
+  - ✅ Encrypts all traffic between client and server
+  - ✅ Protects sensitive data (passwords, credit cards, personal info)
+  - ✅ Prevents man-in-the-middle attacks
+  - ✅ Verifies server identity (SSL/TLS certificates)
+  - ✅ Required for modern web features (service workers, geolocation, etc.)
+
+  **SEO & Trust Benefits**:
+  - ✅ Google ranks HTTPS sites higher than HTTP
+  - ✅ Browsers show "Secure" padlock icon
+  - ✅ Users trust HTTPS sites more
+  - ✅ Required for payment processing (PCI-DSS compliance)
+
+  **Modern Web Requirements**:
+  - Most modern web APIs require HTTPS
+  - Progressive Web Apps (PWAs) require HTTPS
+  - HTTP/2 and HTTP/3 require HTTPS
+  - Browser features like webcam access require HTTPS
+
+  ## SSL/TLS Certificate Required
+
+  To serve HTTPS traffic, you need:
+  1. **SSL/TLS Certificate** - Can be obtained from:
+     - Let's Encrypt (free, automated)
+     - Commercial CAs (DigiCert, Sectigo, etc.)
+     - IBM Cloud Certificate Manager
+  2. **Web server configuration** - nginx, Apache, etc.
+  3. **Certificate installation** on your instance
+
+  ## Next Steps
+  After creating this rule:
+  1. Install SSL/TLS certificate on your instance
+  2. Configure web server (nginx/Apache) for HTTPS
+  3. Test HTTPS access: `curl https://<instance-floating-ip>`
+  4. View all rules: `SECURITY_GROUP_ID=<id> mise run security-groups:get`
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const rule = res.body;
+    console.log(`\n✅ HTTPS Rule Created Successfully!`);
+    console.log(`\n=== Rule Details ===`);
+    console.log(`Rule ID: ${rule.id}`);
+    console.log(`Direction: ${rule.direction}`);
+    console.log(`Protocol: ${rule.protocol}`);
+    console.log(`Port Range: ${rule.port_min}-${rule.port_max}`);
+
+    if (rule.remote && rule.remote.cidr_block) {
+      console.log(`Remote CIDR: ${rule.remote.cidr_block}`);
+      console.log(`             (accepts HTTPS traffic from anywhere)`);
+    }
+
+    console.log(`\n✅ Production Ready!`);
+    console.log(`   HTTPS is the recommended protocol for all production web traffic.`);
+
+    console.log(`\n💡 Don't forget:`);
+    console.log(`   • Install SSL/TLS certificate on your instance`);
+    console.log(`   • Configure web server (nginx/Apache) for HTTPS`);
+    console.log(`   • Consider Let's Encrypt for free SSL certificates`);
+
+    console.log(`\n💡 Next Steps:`);
+    console.log(`   • Test HTTPS: curl https://<instance-floating-ip>`);
+    console.log(`   • View all rules: SECURITY_GROUP_ID=<id> mise run security-groups:get`);
+
+  } else if (res.status === 400) {
+    console.error(`\n❌ Bad Request (400)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid rule parameters'}`);
+    console.error(`\nCheck that SECURITY_GROUP_ID is set correctly`);
+
+  } else if (res.status === 404) {
+    console.error(`\n❌ Not Found (404)`);
+    console.error(`Security group not found`);
+    console.error(`\nVerify the security group ID exists:`);
+    console.error(`mise run security-groups:list`);
+
+  } else if (res.status === 409) {
+    console.error(`\n❌ Conflict (409)`);
+    console.error(`HTTPS rule already exists or conflicts with existing rule`);
+    console.error(`\nView existing rules:`);
+    console.error(`SECURITY_GROUP_ID=<id> mise run security-groups:get`);
+  }
+}

@@ -1,0 +1,253 @@
+meta {
+  name: Create Security Group Rule
+  type: http
+  seq: 8
+}
+
+post {
+  url: {{vpc_endpoint}}/v1/security_groups/{{security_group_id}}/rules?version={{api_version}}&generation=2
+  body: json
+  auth: none
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+params:path {
+  security_group_id: {{security_group_id}}
+}
+
+headers {
+  Authorization: Bearer {{bearer_token}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "direction": "{{RULE_DIRECTION}}",
+    "ip_version": "ipv4",
+    "protocol": "{{RULE_PROTOCOL}}",
+    "remote": {
+      "cidr_block": "{{REMOTE_CIDR}}"
+    }
+  }
+}
+
+docs {
+  # Create Custom Security Group Rule (Advanced)
+
+  Creates a custom security group rule with full control over all parameters.
+  For common use cases, use the pre-defined templates instead (add-rule-ssh.bru, add-rule-http.bru, etc.).
+
+  ## Use Case
+  - Custom port ranges
+  - Non-standard protocols
+  - ICMP rules
+  - Security group-to-security group rules
+  - Complex filtering requirements
+
+  ## Required Environment Variables
+  - `SECURITY_GROUP_ID`: The ID of the security group (e.g., r006-abc123...)
+  - `RULE_DIRECTION`: Direction of traffic ("inbound" or "outbound")
+  - `RULE_PROTOCOL`: Protocol to allow ("all", "tcp", "udp", "icmp")
+  - `REMOTE_CIDR`: Source/destination CIDR block (e.g., "0.0.0.0/0", "10.0.0.0/8")
+
+  ## Optional Environment Variables (Protocol-Specific)
+
+  ### For TCP/UDP protocols:
+  - `PORT_MIN`: Starting port number (1-65535)
+  - `PORT_MAX`: Ending port number (1-65535)
+
+  ### For ICMP protocol:
+  - `ICMP_TYPE`: ICMP type code (0-254)
+  - `ICMP_CODE`: ICMP code (0-255)
+
+  ## Advanced: Security Group as Remote
+
+  To allow traffic from another security group instead of a CIDR block:
+  1. Edit the JSON body manually in this file
+  2. Replace `"cidr_block": "{{REMOTE_CIDR}}"` with `"id": "r006-other-sg-id"`
+
+  Example for SG-to-SG rule:
+  ```json
+  "remote": {
+    "id": "r006-abc123-other-security-group-id"
+  }
+  ```
+
+  ## Usage Examples
+
+  ### Custom TCP port range (3000-3999):
+  ```bash
+  SECURITY_GROUP_ID="r006-abc123..." \
+  RULE_DIRECTION="inbound" \
+  RULE_PROTOCOL="tcp" \
+  REMOTE_CIDR="0.0.0.0/0" \
+  PORT_MIN="3000" \
+  PORT_MAX="3999" \
+  mise run security-groups:add-rule
+  ```
+
+  ### Allow MySQL from specific network (port 3306):
+  ```bash
+  SECURITY_GROUP_ID="r006-abc123..." \
+  RULE_DIRECTION="inbound" \
+  RULE_PROTOCOL="tcp" \
+  REMOTE_CIDR="10.240.0.0/24" \
+  PORT_MIN="3306" \
+  PORT_MAX="3306" \
+  mise run security-groups:add-rule
+  ```
+
+  ### Allow PostgreSQL from bastion host (port 5432):
+  ```bash
+  SECURITY_GROUP_ID="r006-abc123..." \
+  RULE_DIRECTION="inbound" \
+  RULE_PROTOCOL="tcp" \
+  REMOTE_CIDR="10.240.0.5/32" \
+  PORT_MIN="5432" \
+  PORT_MAX="5432" \
+  mise run security-groups:add-rule
+  ```
+
+  ### Allow ICMP ping from anywhere:
+  ```bash
+  SECURITY_GROUP_ID="r006-abc123..." \
+  RULE_DIRECTION="inbound" \
+  RULE_PROTOCOL="icmp" \
+  REMOTE_CIDR="0.0.0.0/0" \
+  ICMP_TYPE="8" \
+  ICMP_CODE="0" \
+  mise run security-groups:add-rule
+  ```
+
+  ### Allow all UDP traffic outbound:
+  ```bash
+  SECURITY_GROUP_ID="r006-abc123..." \
+  RULE_DIRECTION="outbound" \
+  RULE_PROTOCOL="udp" \
+  REMOTE_CIDR="0.0.0.0/0" \
+  mise run security-groups:add-rule
+  ```
+
+  ## Protocol Reference
+
+  ### Protocol: "all"
+  - Allows all protocols (TCP, UDP, ICMP, etc.)
+  - No port or type/code parameters needed
+  - Most permissive option
+
+  ### Protocol: "tcp"
+  - Transmission Control Protocol (connection-oriented)
+  - Requires `PORT_MIN` and `PORT_MAX` if restricting to specific ports
+  - Common ports: 22 (SSH), 80 (HTTP), 443 (HTTPS), 3306 (MySQL), 5432 (PostgreSQL)
+
+  ### Protocol: "udp"
+  - User Datagram Protocol (connectionless)
+  - Requires `PORT_MIN` and `PORT_MAX` if restricting to specific ports
+  - Common ports: 53 (DNS), 123 (NTP), 161 (SNMP)
+
+  ### Protocol: "icmp"
+  - Internet Control Message Protocol
+  - Used for ping, traceroute, network diagnostics
+  - Requires `ICMP_TYPE` and optionally `ICMP_CODE`
+  - Common types: 8 (echo request/ping), 0 (echo reply), 3 (destination unreachable)
+
+  ## Direction Reference
+
+  - **inbound**: Traffic coming INTO instances (from internet/other instances)
+  - **outbound**: Traffic leaving instances (to internet/other instances)
+
+  ## Response
+  - **201 Created**: Rule created successfully, returns rule details with ID
+  - **400 Bad Request**: Invalid parameters (check protocol, ports, CIDR format)
+  - **404 Not Found**: Security group doesn't exist
+  - **409 Conflict**: Rule already exists (duplicate)
+
+  ## Limitation: Dynamic JSON Body
+
+  ⚠️ **Note**: Bruno doesn't easily support conditional JSON bodies. This file uses a basic template.
+
+  **For TCP/UDP with ports**: You must manually edit the body section to add port fields
+  **For ICMP with type/code**: You must manually edit the body section to add ICMP fields
+  **For SG-to-SG rules**: You must manually edit the remote section to use security group ID
+
+  **For most use cases, use the pre-defined templates instead:**
+  - `add-rule-self.bru` - Self-reference inbound
+  - `add-rule-outbound-all.bru` - All outbound
+  - `add-rule-ssh.bru` - SSH (port 22)
+  - `add-rule-http.bru` - HTTP (port 80)
+  - `add-rule-https.bru` - HTTPS (port 443)
+
+  ## Next Steps
+  After creating a custom rule:
+  1. View all rules: `SECURITY_GROUP_ID=<id> mise run security-groups:get`
+  2. Test connectivity based on rule type
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const rule = res.body;
+    console.log(`\n✅ Custom Security Group Rule Created Successfully!`);
+    console.log(`\n=== Rule Details ===`);
+    console.log(`Rule ID: ${rule.id}`);
+    console.log(`Direction: ${rule.direction}`);
+    console.log(`Protocol: ${rule.protocol}`);
+    console.log(`IP Version: ${rule.ip_version}`);
+
+    if (rule.protocol === 'tcp' || rule.protocol === 'udp') {
+      if (rule.port_min && rule.port_max) {
+        console.log(`Port Range: ${rule.port_min}-${rule.port_max}`);
+      } else {
+        console.log(`Ports: All (no restriction)`);
+      }
+    }
+
+    if (rule.protocol === 'icmp') {
+      if (rule.type !== undefined) {
+        console.log(`ICMP Type: ${rule.type}`);
+      }
+      if (rule.code !== undefined) {
+        console.log(`ICMP Code: ${rule.code}`);
+      }
+    }
+
+    if (rule.remote) {
+      if (rule.remote.cidr_block) {
+        console.log(`Remote CIDR: ${rule.remote.cidr_block}`);
+      } else if (rule.remote.id) {
+        console.log(`Remote Security Group: ${rule.remote.id}`);
+      } else if (rule.remote.address) {
+        console.log(`Remote IP Address: ${rule.remote.address}`);
+      }
+    }
+
+    console.log(`\n💡 Next Steps:`);
+    console.log(`   • View all rules: SECURITY_GROUP_ID=<id> mise run security-groups:get`);
+    console.log(`   • Test connectivity based on rule parameters`);
+
+  } else if (res.status === 400) {
+    console.error(`\n❌ Bad Request (400)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid rule parameters'}`);
+    console.error(`\nCommon issues:`);
+    console.error(`  • Invalid CIDR format (must be like "0.0.0.0/0" or "10.0.0.0/24")`);
+    console.error(`  • Invalid port range (must be 1-65535)`);
+    console.error(`  • Invalid protocol (must be "all", "tcp", "udp", or "icmp")`);
+    console.error(`  • Invalid direction (must be "inbound" or "outbound")`);
+    console.error(`  • Missing required fields for protocol (e.g., port_min/max for TCP/UDP)`);
+
+  } else if (res.status === 404) {
+    console.error(`\n❌ Not Found (404)`);
+    console.error(`Security group not found`);
+    console.error(`\nVerify the security group ID exists:`);
+    console.error(`mise run security-groups:list`);
+
+  } else if (res.status === 409) {
+    console.error(`\n❌ Conflict (409)`);
+    console.error(`Rule already exists or conflicts with existing rule`);
+    console.error(`\nView existing rules:`);
+    console.error(`SECURITY_GROUP_ID=<id> mise run security-groups:get`);
+  }
+}

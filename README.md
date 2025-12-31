@@ -32,9 +32,16 @@ This collection provides ready-to-use API requests for managing IBM Cloud VPC in
 - **Create Subnet** - Two methods:
   - IP count method (default) - Specify number of IPs, auto-assign CIDR
   - CIDR method (alternative) - Specify exact CIDR block
-- **Create Security Group** - Create empty security group (rules added separately)
+- **Create Security Group** - Create empty security group
+- **Add Security Group Rules** - Six rule creation methods:
+  - Self-reference inbound (allow traffic from same security group)
+  - Outbound all (allow all outbound traffic)
+  - SSH (port 22) with configurable source CIDR
+  - HTTP (port 80) for web servers
+  - HTTPS (port 443) for secure web servers
+  - Custom rules (advanced - full parameter control)
 
-**Total**: 20 API endpoints (1 auth + 2 resource group + 13 VPC read + 4 VPC create)
+**Total**: 26 API endpoints (1 auth + 2 resource group + 13 VPC read + 4 VPC create + 1 SG create + 6 SG rules)
 
 ## Prerequisites
 
@@ -221,8 +228,24 @@ mise run subnets:create-by-cidr
 NEW_SG_NAME="web-servers-sg" mise run security-groups:create
 export SECURITY_GROUP_ID="<sg-id-from-output>"
 
-# Step 5: View your new security group (no rules yet)
-mise run security-groups:get
+# Step 5: Add default security group rules
+# Allow instances in same security group to communicate
+SECURITY_GROUP_ID="<sg-id-from-output>" mise run security-groups:add-self
+
+# Allow all outbound traffic (for package updates, etc.)
+SECURITY_GROUP_ID="<sg-id-from-output>" mise run security-groups:add-outbound
+
+# Step 6: Add application-specific rules
+# Allow SSH from your office IP (replace with your IP)
+SECURITY_GROUP_ID="<sg-id-from-output>" \
+SSH_SOURCE_CIDR="203.0.113.0/24" \
+mise run security-groups:add-ssh
+
+# Allow HTTPS for web servers
+SECURITY_GROUP_ID="<sg-id-from-output>" mise run security-groups:add-https
+
+# Step 7: View your configured security group with all rules
+SECURITY_GROUP_ID="<sg-id-from-output>" mise run security-groups:get
 ```
 
 #### Example 3: Security Audit
@@ -280,6 +303,12 @@ subnets:create-by-cidr         - Create subnet with CIDR block (set NEW_SUBNET_N
 security-groups:list           - List all security groups
 security-groups:get            - Get specific security group by ID (set SECURITY_GROUP_ID)
 security-groups:create         - Create security group (set NEW_SG_NAME, VPC_ID)
+security-groups:add-self       - Add self-reference inbound rule (set SECURITY_GROUP_ID)
+security-groups:add-outbound   - Add outbound all rule (set SECURITY_GROUP_ID)
+security-groups:add-ssh        - Add SSH inbound rule (set SECURITY_GROUP_ID, optionally SSH_SOURCE_CIDR)
+security-groups:add-http       - Add HTTP inbound rule (set SECURITY_GROUP_ID)
+security-groups:add-https      - Add HTTPS inbound rule (set SECURITY_GROUP_ID)
+security-groups:add-rule       - Add custom rule (set SECURITY_GROUP_ID, RULE_DIRECTION, RULE_PROTOCOL, REMOTE_CIDR)
 ```
 
 ### Instance Operations
@@ -327,6 +356,12 @@ bruno-ibm-cloud-vpc/
     │   └── get-subnet.bru                 # Get subnet with resource details
     ├── security-groups/
     │   ├── create-security-group.bru      # Create security group
+    │   ├── add-rule-self.bru              # Add self-reference inbound rule
+    │   ├── add-rule-outbound-all.bru      # Add outbound all rule
+    │   ├── add-rule-ssh.bru               # Add SSH inbound rule
+    │   ├── add-rule-http.bru              # Add HTTP inbound rule
+    │   ├── add-rule-https.bru             # Add HTTPS inbound rule
+    │   ├── create-security-group-rule.bru # Create custom rule (advanced)
     │   ├── list-security-groups.bru       # List all security groups
     │   └── get-security-group.bru         # Get security group with rules
     ├── instances/
@@ -503,6 +538,6 @@ MIT License - Feel free to use and modify for your own IBM Cloud VPC automation 
 
 ---
 
-**Last Updated**: December 30, 2024
-**Collection Version**: 1.0
+**Last Updated**: December 31, 2024
+**Collection Version**: 1.1
 **IBM Cloud VPC API Version**: 2024-12-10
