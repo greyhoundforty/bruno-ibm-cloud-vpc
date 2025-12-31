@@ -1,0 +1,252 @@
+meta {
+  name: Create Subnet
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{vpc_endpoint}}/v1/subnets?version={{api_version}}&generation=2
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+body:json {
+  {
+    "name": "{{NEW_SUBNET_NAME}}",
+    "vpc": {
+      "id": "{{vpc_id}}"
+    },
+    "zone": {
+      "name": "{{ZONE_NAME}}"
+    },
+    "total_ipv4_address_count": {{SUBNET_IP_COUNT}}
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const subnet = res.body;
+    console.log(`\n✅ Subnet Created Successfully!`);
+    console.log(`\n=== Subnet Details ===`);
+    console.log(`Name: ${subnet.name}`);
+    console.log(`ID: ${subnet.id}`);
+    console.log(`Status: ${subnet.status}`);
+    console.log(`CRN: ${subnet.crn}`);
+    console.log(`Created: ${subnet.created_at}`);
+
+    console.log(`\n--- Network Configuration ---`);
+    console.log(`IPv4 CIDR Block: ${subnet.ipv4_cidr_block} (auto-assigned)`);
+    console.log(`Total IPv4 Addresses: ${subnet.total_ipv4_address_count}`);
+    console.log(`Available IPv4 Addresses: ${subnet.available_ipv4_address_count}`);
+    console.log(`IP Version: ${subnet.ip_version || 'ipv4'}`);
+
+    console.log(`\n--- Location & Organization ---`);
+    console.log(`VPC: ${subnet.vpc?.name || 'N/A'} (${subnet.vpc?.id || 'N/A'})`);
+    console.log(`Zone: ${subnet.zone?.name || 'N/A'}`);
+    console.log(`Resource Group: ${subnet.resource_group?.name || 'N/A'} (${subnet.resource_group?.id || 'N/A'})`);
+
+    console.log(`\n--- Default Resources (Auto-Assigned) ---`);
+    console.log(`Network ACL: ${subnet.network_acl?.name || 'N/A'} (${subnet.network_acl?.id || 'N/A'})`);
+    console.log(`Routing Table: ${subnet.routing_table?.name || 'N/A'} (${subnet.routing_table?.id || 'N/A'})`);
+
+    if (subnet.public_gateway) {
+      console.log(`Public Gateway: ${subnet.public_gateway.name || 'N/A'} (${subnet.public_gateway.id || 'N/A'})`);
+    } else {
+      console.log(`Public Gateway: None (No internet access)`);
+    }
+
+    console.log(`\n--- Next Steps ---`);
+    console.log(`1. Note the auto-assigned CIDR block: ${subnet.ipv4_cidr_block}`);
+    console.log(`2. View this subnet:`);
+    console.log(`   SUBNET_ID=${subnet.id} mise run subnets:get`);
+    console.log(`3. Create security group:`);
+    console.log(`   VPC_ID=${subnet.vpc?.id || 'N/A'} NEW_SG_NAME="my-security-group" mise run security-groups:create`);
+    console.log(`4. Create instances in this subnet:`);
+    console.log(`   SUBNET_ID=${subnet.id} NEW_INSTANCE_NAME="my-instance" mise run instances:create`);
+
+    console.log(`\n💡 Tip: Use --output json flag to see full JSON response`);
+
+  } else if (res.status === 400) {
+    console.error(`\n❌ Bad Request (400)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid request parameters'}`);
+    console.error(`\nCheck:`);
+    console.error(`- IP count is valid (must be power of 2, range: 8-8388608)`);
+    console.error(`- Common values: 16, 32, 64, 128, 256, 512, 1024, 2048, 4096...`);
+    console.error(`- Zone has available address prefix with enough free IPs`);
+    console.error(`- VPC ID is correct`);
+  } else if (res.status === 401) {
+    console.error("\n❌ Token expired - run 'mise run auth' again");
+  } else if (res.status === 404) {
+    console.error(`\n❌ Not Found (404)`);
+    console.error(`VPC not found - check VPC_ID environment variable`);
+    console.error(`Run 'mise run vpc:list' to see available VPCs`);
+  } else if (res.status === 409) {
+    console.error(`\n❌ Conflict (409)`);
+    console.error(`Subnet name already exists`);
+  } else if (res.status === 422) {
+    console.error(`\n❌ Validation Error (422)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid parameters'}`);
+    console.error(`\nCommon issues:`);
+    console.error(`- No available address prefix with requested IP count in specified zone`);
+    console.error(`- IP count must be power of 2 (valid range: 8 to 8,388,608)`);
+  } else {
+    console.error(`\n❌ Error: ${res.status} - ${res.statusText}`);
+    if (res.body.errors) {
+      console.error(`Details: ${JSON.stringify(res.body.errors, null, 2)}`);
+    }
+  }
+}
+
+docs {
+  # Create Subnet (Default Method)
+
+  Creates a new subnet in a VPC by specifying the total number of IPv4 addresses.
+  IBM Cloud automatically assigns an available CIDR block from the VPC's address prefixes.
+
+  This is the recommended method for most use cases.
+
+  ## Prerequisites:
+  - Valid IBM Cloud API key (IBM_API_KEY environment variable)
+  - Existing VPC ID with auto address prefix management
+  - Available address prefix in the zone with enough free IPs
+
+  ## Environment Variables Required:
+  - NEW_SUBNET_NAME: Name for the new subnet (e.g., "my-subnet")
+  - VPC_ID: Parent VPC ID (e.g., "r006-abc123...")
+  - ZONE_NAME: Availability zone (e.g., "us-south-1")
+  - SUBNET_IP_COUNT: Total number of IPv4 addresses (e.g., 256)
+
+  ## Request Body Fields:
+
+  ### Required:
+  - name (string): Subnet name (must be unique within VPC)
+  - vpc.id (string): Parent VPC ID
+  - zone.name (string): Availability zone
+  - total_ipv4_address_count (number): Total IPv4 addresses
+
+  ### Optional:
+  - resource_group.id (string): Resource group for the subnet
+  - network_acl.id (string): Custom network ACL
+  - public_gateway.id (string): Public gateway for internet access
+  - routing_table.id (string): Custom routing table
+
+  ## IP Count Requirements:
+
+  **MUST be a power of 2 in the range: 8 ≤ value ≤ 8,388,608**
+
+  Common valid IP counts (power of 2):
+  - 8 (/29)        = 3 usable IPs      - Absolute minimum
+  - 16 (/28)       = 11 usable IPs     - Very small
+  - 32 (/27)       = 27 usable IPs     - Small
+  - 64 (/26)       = 59 usable IPs     - Small-Medium
+  - 128 (/25)      = 123 usable IPs    - Medium-Small
+  - 256 (/24)      = 251 usable IPs    - Medium (recommended)
+  - 512 (/23)      = 507 usable IPs    - Large
+  - 1024 (/22)     = 1,019 usable IPs  - Very Large
+  - 2048 (/21)     = 2,043 usable IPs  - Extra Large
+  - 4096 (/20)     = 4,091 usable IPs  - Huge
+  - 8192 (/19)     = 8,187 usable IPs  - Very Huge
+  - 16384 (/18)    = 16,379 usable IPs - Maximum practical
+  - Higher powers of 2 up to 8,388,608 are valid
+
+  Note: IBM Cloud reserves the first 4 IPs in each subnet (gateway, DNS, etc.).
+
+  ## Usage Examples:
+
+  ### With mise (recommended):
+  ```bash
+  VPC_ID="r006-abc123..." \
+  NEW_SUBNET_NAME="my-subnet" \
+  ZONE_NAME="us-south-1" \
+  SUBNET_IP_COUNT=256 \
+  mise run subnets:create
+  ```
+
+  ### With Bruno CLI:
+  ```bash
+  VPC_ID="r006-abc123..." \
+  NEW_SUBNET_NAME="my-subnet" \
+  ZONE_NAME="us-south-1" \
+  SUBNET_IP_COUNT=256 \
+  bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod
+  ```
+
+  ### Different subnet sizes:
+  ```bash
+  # Very small subnet (16 IPs)
+  SUBNET_IP_COUNT=16 mise run subnets:create
+
+  # Small subnet (64 IPs)
+  SUBNET_IP_COUNT=64 mise run subnets:create
+
+  # Medium subnet (256 IPs) - recommended for most workloads
+  SUBNET_IP_COUNT=256 mise run subnets:create
+
+  # Large subnet (1024 IPs)
+  SUBNET_IP_COUNT=1024 mise run subnets:create
+
+  # Very large subnet (4096 IPs)
+  SUBNET_IP_COUNT=4096 mise run subnets:create
+  ```
+
+  ## Alternative: Create by CIDR Block
+  If you need to specify an exact CIDR block (e.g., "10.240.0.0/24") for
+  networking requirements or integration with existing infrastructure,
+  use the `create-subnet-by-cidr.bru` file instead.
+
+  ## How It Works:
+  1. You specify the desired number of IP addresses
+  2. IBM Cloud finds an available address prefix in the zone with enough free space
+  3. IBM Cloud automatically allocates a CIDR block from that prefix
+  4. The assigned CIDR block is returned in the response
+
+  ## Requirements:
+  - VPC must have "auto" address prefix management OR
+  - VPC must have a manually created address prefix in the zone with enough free IPs
+  - The zone's address prefix must have a contiguous block of the requested size
+
+  ## Response (201 Created):
+  Returns the created subnet object with:
+  - id: Subnet ID
+  - ipv4_cidr_block: Auto-assigned CIDR block
+  - total_ipv4_address_count: Requested IP count
+  - available_ipv4_address_count: Available IPs
+  - Other subnet details
+
+  ## Common Status Codes:
+  - 201: Subnet created successfully
+  - 400: Invalid IP count (not power of 2)
+  - 401: Authentication failed
+  - 404: VPC not found
+  - 409: Subnet name conflict
+  - 422: No available address prefix with enough free IPs
+
+  ## When to Use This Method:
+  ✅ You want IBM Cloud to automatically assign CIDR blocks
+  ✅ You don't need specific IP ranges
+  ✅ You want to avoid CIDR calculation
+  ✅ VPC has auto address prefix management
+
+  ## When to Use CIDR Method Instead:
+  ✅ You need specific IP ranges for networking requirements
+  ✅ You're integrating with existing infrastructure
+  ✅ You need predictable IP addressing
+  ✅ You're following a specific IP allocation scheme
+
+  ## API Reference:
+  https://cloud.ibm.com/apidocs/vpc/latest#create-subnet
+}

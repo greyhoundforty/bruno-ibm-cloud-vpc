@@ -60,12 +60,76 @@ script:post-response {
 
     if (subnet.reserved_ips && subnet.reserved_ips.length > 0) {
       console.log(`\n--- Reserved IPs (${subnet.reserved_ips.length}) ---`);
+
+      const instanceIPs = [];
+      const lbIPs = [];
+      const vpnIPs = [];
+      const otherIPs = [];
+
       subnet.reserved_ips.forEach(ip => {
-        console.log(`  - ${ip.address || 'N/A'} (${ip.name || ip.id})`);
         if (ip.target) {
-          console.log(`    Target: ${ip.target.resource_type}`);
+          const resourceType = ip.target.resource_type;
+          if (resourceType === 'network_interface') {
+            instanceIPs.push(ip);
+          } else if (resourceType === 'load_balancer') {
+            lbIPs.push(ip);
+          } else if (resourceType === 'vpn_gateway' || resourceType === 'vpn_server') {
+            vpnIPs.push(ip);
+          } else {
+            otherIPs.push(ip);
+          }
+        } else {
+          otherIPs.push(ip);
         }
       });
+
+      if (instanceIPs.length > 0) {
+        console.log(`\n  Instance Network Interfaces (${instanceIPs.length}):`);
+        instanceIPs.forEach(ip => {
+          console.log(`    • ${ip.address} - ${ip.name || 'Unnamed'}`);
+          console.log(`      Network Interface ID: ${ip.target?.id || 'N/A'}`);
+          if (ip.target?.name) {
+            console.log(`      Interface Name: ${ip.target.name}`);
+          }
+          console.log(`      Reserved IP ID: ${ip.id}`);
+          console.log(`      💡 Get instance details: INSTANCE_ID=<id> mise run instances:get`);
+        });
+      }
+
+      if (lbIPs.length > 0) {
+        console.log(`\n  Load Balancers (${lbIPs.length}):`);
+        lbIPs.forEach(ip => {
+          console.log(`    • ${ip.address} - ${ip.name || 'Unnamed'}`);
+          console.log(`      Load Balancer ID: ${ip.target?.id || 'N/A'}`);
+          if (ip.target?.name) {
+            console.log(`      LB Name: ${ip.target.name}`);
+          }
+        });
+      }
+
+      if (vpnIPs.length > 0) {
+        console.log(`\n  VPN Gateways/Servers (${vpnIPs.length}):`);
+        vpnIPs.forEach(ip => {
+          console.log(`    • ${ip.address} - ${ip.target?.resource_type || 'VPN'}`);
+          console.log(`      ID: ${ip.target?.id || 'N/A'}`);
+        });
+      }
+
+      if (otherIPs.length > 0) {
+        console.log(`\n  Other Reserved IPs (${otherIPs.length}):`);
+        otherIPs.forEach(ip => {
+          console.log(`    • ${ip.address} - ${ip.name || ip.id}`);
+          if (ip.target) {
+            console.log(`      Type: ${ip.target.resource_type}`);
+            console.log(`      Target ID: ${ip.target.id || 'N/A'}`);
+          } else {
+            console.log(`      Status: Reserved (unattached)`);
+          }
+        });
+      }
+    } else {
+      console.log(`\n--- Reserved IPs ---`);
+      console.log(`  No IPs currently reserved (${subnet.available_ipv4_address_count} available)`);
     }
 
     console.log(`\n--- Additional Info ---`);

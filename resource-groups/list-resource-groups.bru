@@ -1,0 +1,153 @@
+meta {
+  name: List Resource Groups
+  type: http
+  seq: 1
+}
+
+get {
+  url: https://resource-controller.cloud.ibm.com/v2/resource_groups
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const groups = res.body.resources;
+    console.log(`\n=== Resource Groups (${groups.length} total) ===\n`);
+
+    groups.forEach(group => {
+      console.log(`Name: ${group.name}`);
+      console.log(`ID: ${group.id}`);
+      console.log(`State: ${group.state}`);
+      console.log(`Default: ${group.default || false}`);
+      if (group.quota_id) {
+        console.log(`Quota ID: ${group.quota_id}`);
+      }
+      console.log(`Created: ${group.created_at}`);
+      console.log(`Updated: ${group.updated_at}`);
+      console.log('---');
+    });
+
+    console.log(`\n💡 To use a resource group ID in other commands:`);
+    console.log(`   export RESOURCE_GROUP_ID="<id-from-above>"`);
+    console.log(`\n💡 Or use the get-by-name endpoint to automatically extract the ID:`);
+    console.log(`   RESOURCE_GROUP_NAME="Default" mise run resource-groups:get-by-name`);
+
+  } else if (res.status === 401) {
+    console.error("\n❌ Token expired - run 'mise run auth' again");
+  } else {
+    console.error(`\n❌ Error: ${res.status} - ${res.statusText}`);
+    if (res.body.errors) {
+      console.error(`Details: ${JSON.stringify(res.body.errors, null, 2)}`);
+    }
+  }
+}
+
+docs {
+  # List Resource Groups
+
+  Lists all resource groups in your IBM Cloud account. Resource groups are used
+  to organize and manage access to resources.
+
+  ## Prerequisites:
+  - Valid IBM Cloud API key (IBM_API_KEY environment variable)
+  - IAM bearer token (automatically obtained by mise tasks)
+
+  ## What are Resource Groups?
+
+  Resource groups are containers for organizing IBM Cloud resources:
+  - Group related resources for easier management
+  - Control access via IAM policies
+  - Track usage and costs by group
+  - Each account has a "Default" resource group
+  - Resources cannot be moved between groups after creation
+
+  ## Usage Examples:
+
+  ### With mise (recommended):
+  ```bash
+  mise run resource-groups:list
+  ```
+
+  ### With Bruno CLI:
+  ```bash
+  bru run auth/get-iam-token.bru resource-groups/list-resource-groups.bru --env prod
+  ```
+
+  ## Response Fields:
+
+  Each resource group includes:
+  - **id**: Unique identifier (use this in VPC creation)
+  - **name**: Human-readable name
+  - **state**: Current state (active, inactive, etc.)
+  - **default**: Boolean indicating if this is the default group
+  - **quota_id**: Associated quota identifier
+  - **created_at**: Creation timestamp
+  - **updated_at**: Last update timestamp
+  - **crn**: Cloud Resource Name
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 403: Insufficient permissions
+  - 500: Internal server error
+
+  ## Finding Your Resource Group ID:
+
+  ### Method 1: List All (this endpoint)
+  ```bash
+  mise run resource-groups:list
+  # Copy the ID from the output
+  export RESOURCE_GROUP_ID="<id-from-output>"
+  ```
+
+  ### Method 2: Get by Name (automatic)
+  ```bash
+  # Automatically extracts and displays ID
+  RESOURCE_GROUP_NAME="Default" mise run resource-groups:get-by-name
+
+  # Use in commands
+  RESOURCE_GROUP_ID=$(RESOURCE_GROUP_NAME="Default" mise run resource-groups:get-by-name)
+  ```
+
+  ## Using Resource Group ID:
+
+  After getting the ID, use it in resource creation:
+  ```bash
+  # Create VPC in specific resource group
+  RESOURCE_GROUP_ID="<id>" NEW_VPC_NAME="my-vpc" mise run vpc:create
+
+  # Create subnet in specific resource group
+  RESOURCE_GROUP_ID="<id>" ... mise run subnets:create
+
+  # Create security group in specific resource group
+  RESOURCE_GROUP_ID="<id>" ... mise run security-groups:create
+  ```
+
+  ## Default Resource Group:
+
+  Every IBM Cloud account has a "Default" resource group:
+  - Created automatically
+  - Cannot be deleted
+  - Used when no resource group is specified
+  - Typically has `default: true` in the response
+
+  ## Best Practices:
+
+  1. **Organization**: Create resource groups for different environments (dev, test, prod)
+  2. **Naming**: Use clear, descriptive names (e.g., "production-vpc", "development-resources")
+  3. **Access Control**: Assign IAM policies at the resource group level
+  4. **Cost Tracking**: Use resource groups to track and allocate costs
+  5. **Planning**: Plan resource groups before creating resources (can't move resources later)
+
+  ## API Reference:
+  https://cloud.ibm.com/apidocs/resource-controller/resource-manager#list-resource-groups
+}

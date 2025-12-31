@@ -12,6 +12,14 @@
 description = "Get IBM Cloud IAM token"
 run = "bru run auth/get-iam-token.bru --env prod"
 
+[tasks."resource-groups:list"]
+description = "List all resource groups"
+run = "bru run auth/get-iam-token.bru resource-groups/list-resource-groups.bru --env prod"
+
+[tasks."resource-groups:get-by-name"]
+description = "Get resource group ID by name (set RESOURCE_GROUP_NAME)"
+run = "bru run auth/get-iam-token.bru resource-groups/get-resource-group-by-name.bru --env prod"
+
 [tasks."vpc:list"]
 description = "List all VPCs"
 run = "bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod"
@@ -22,7 +30,19 @@ run = "bru run auth/get-iam-token.bru vpc/get-vpc.bru --env prod"
 
 [tasks."vpc:create"]
 description = "Create new VPC (set NEW_VPC_NAME, optionally RESOURCE_GROUP_ID)"
-run = "bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod --output json"
+run = "bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod"
+
+[tasks."subnets:create"]
+description = "Create subnet with IP count (set NEW_SUBNET_NAME, VPC_ID, ZONE_NAME, SUBNET_IP_COUNT)"
+run = "bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod"
+
+[tasks."subnets:create-by-cidr"]
+description = "Create subnet with CIDR block (set NEW_SUBNET_NAME, VPC_ID, ZONE_NAME, SUBNET_CIDR)"
+run = "bru run auth/get-iam-token.bru vpc/subnets/create-subnet-by-cidr.bru --env prod"
+
+[tasks."security-groups:create"]
+description = "Create security group (set NEW_SG_NAME, VPC_ID)"
+run = "bru run auth/get-iam-token.bru vpc/security-groups/create-security-group.bru --env prod"
 
 [tasks."subnets:list"]
 description = "List all subnets"

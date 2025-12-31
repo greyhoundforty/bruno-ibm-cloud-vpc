@@ -1,0 +1,239 @@
+meta {
+  name: Create Subnet (by CIDR)
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{vpc_endpoint}}/v1/subnets?version={{api_version}}&generation=2
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+body:json {
+  {
+    "name": "{{NEW_SUBNET_NAME}}",
+    "vpc": {
+      "id": "{{vpc_id}}"
+    },
+    "zone": {
+      "name": "{{ZONE_NAME}}"
+    },
+    "ipv4_cidr_block": "{{SUBNET_CIDR}}"
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const subnet = res.body;
+    console.log(`\n✅ Subnet Created Successfully!`);
+    console.log(`\n=== Subnet Details ===`);
+    console.log(`Name: ${subnet.name}`);
+    console.log(`ID: ${subnet.id}`);
+    console.log(`Status: ${subnet.status}`);
+    console.log(`CRN: ${subnet.crn}`);
+    console.log(`Created: ${subnet.created_at}`);
+
+    console.log(`\n--- Network Configuration ---`);
+    console.log(`IPv4 CIDR Block: ${subnet.ipv4_cidr_block}`);
+    console.log(`Total IPv4 Addresses: ${subnet.total_ipv4_address_count}`);
+    console.log(`Available IPv4 Addresses: ${subnet.available_ipv4_address_count}`);
+    console.log(`IP Version: ${subnet.ip_version || 'ipv4'}`);
+
+    console.log(`\n--- Location & Organization ---`);
+    console.log(`VPC: ${subnet.vpc?.name || 'N/A'} (${subnet.vpc?.id || 'N/A'})`);
+    console.log(`Zone: ${subnet.zone?.name || 'N/A'}`);
+    console.log(`Resource Group: ${subnet.resource_group?.name || 'N/A'} (${subnet.resource_group?.id || 'N/A'})`);
+
+    console.log(`\n--- Default Resources (Auto-Assigned) ---`);
+    console.log(`Network ACL: ${subnet.network_acl?.name || 'N/A'} (${subnet.network_acl?.id || 'N/A'})`);
+    console.log(`Routing Table: ${subnet.routing_table?.name || 'N/A'} (${subnet.routing_table?.id || 'N/A'})`);
+
+    if (subnet.public_gateway) {
+      console.log(`Public Gateway: ${subnet.public_gateway.name || 'N/A'} (${subnet.public_gateway.id || 'N/A'})`);
+    } else {
+      console.log(`Public Gateway: None (No internet access)`);
+    }
+
+    console.log(`\n--- Next Steps ---`);
+    console.log(`1. Create security group in this VPC:`);
+    console.log(`   VPC_ID=${subnet.vpc?.id || 'N/A'} NEW_SG_NAME="my-security-group" mise run security-groups:create`);
+    console.log(`2. View this subnet:`);
+    console.log(`   SUBNET_ID=${subnet.id} mise run subnets:get`);
+    console.log(`3. Add public gateway for internet access (optional):`);
+    console.log(`   # First create public gateway, then attach to subnet`);
+    console.log(`4. Create instances in this subnet:`);
+    console.log(`   SUBNET_ID=${subnet.id} NEW_INSTANCE_NAME="my-instance" mise run instances:create`);
+
+    console.log(`\n💡 Tip: Use --output json flag to see full JSON response`);
+
+  } else if (res.status === 400) {
+    console.error(`\n❌ Bad Request (400)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid request parameters'}`);
+    console.error(`\nCheck:`);
+    console.error(`- CIDR block is valid and doesn't overlap with existing subnets`);
+    console.error(`- Zone name is correct (e.g., "us-south-1", "us-south-2")`);
+    console.error(`- VPC ID is correct`);
+  } else if (res.status === 401) {
+    console.error("\n❌ Token expired - run 'mise run auth' again");
+  } else if (res.status === 404) {
+    console.error(`\n❌ Not Found (404)`);
+    console.error(`VPC not found - check VPC_ID environment variable`);
+    console.error(`Run 'mise run vpc:list' to see available VPCs`);
+  } else if (res.status === 409) {
+    console.error(`\n❌ Conflict (409)`);
+    console.error(`Subnet name already exists or CIDR block overlaps with existing subnet`);
+  } else if (res.status === 422) {
+    console.error(`\n❌ Validation Error (422)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid parameters'}`);
+    console.error(`\nCommon issues:`);
+    console.error(`- CIDR block not within VPC address prefix range`);
+    console.error(`- CIDR block overlaps with existing subnet`);
+  } else {
+    console.error(`\n❌ Error: ${res.status} - ${res.statusText}`);
+    if (res.body.errors) {
+      console.error(`Details: ${JSON.stringify(res.body.errors, null, 2)}`);
+    }
+  }
+}
+
+docs {
+  # Create Subnet by CIDR Block (Alternative Method)
+
+  Creates a new subnet in a VPC using a specific IPv4 CIDR block.
+
+  Use this method when you need exact control over IP address ranges.
+  For most use cases, the default IP count method (create-subnet.bru) is recommended.
+
+  ## Prerequisites:
+  - Valid IBM Cloud API key (IBM_API_KEY environment variable)
+  - Existing VPC ID
+  - Zone name in the VPC region
+
+  ## Environment Variables Required:
+  - NEW_SUBNET_NAME: Name for the new subnet (e.g., "my-subnet")
+  - VPC_ID: Parent VPC ID (e.g., "r006-abc123...")
+  - ZONE_NAME: Availability zone (e.g., "us-south-1", "us-south-2", "us-south-3")
+  - SUBNET_CIDR: IPv4 CIDR block (e.g., "10.240.0.0/24")
+
+  ## Request Body Fields:
+
+  ### Required:
+  - name (string): Subnet name (must be unique within VPC)
+  - vpc.id (string): Parent VPC ID
+  - zone.name (string): Availability zone
+  - ipv4_cidr_block (string): IPv4 CIDR block for the subnet
+
+  ### Optional:
+  - resource_group.id (string): Resource group for the subnet
+  - network_acl.id (string): Custom network ACL (uses VPC default if not specified)
+  - public_gateway.id (string): Public gateway for internet access
+  - routing_table.id (string): Custom routing table
+
+  ## CIDR Block Sizing Guide:
+
+  IBM Cloud reserves the first 4 IPs in each subnet:
+  - /28 (16 total IPs)   = 11 usable IPs
+  - /27 (32 total IPs)   = 27 usable IPs
+  - /26 (64 total IPs)   = 59 usable IPs
+  - /25 (128 total IPs)  = 123 usable IPs
+  - /24 (256 total IPs)  = 251 usable IPs
+  - /23 (512 total IPs)  = 507 usable IPs
+  - /22 (1024 total IPs) = 1019 usable IPs
+
+  ## Usage Examples:
+
+  ### With mise (recommended):
+  ```bash
+  VPC_ID="r006-abc123..." \
+  NEW_SUBNET_NAME="my-subnet" \
+  ZONE_NAME="us-south-1" \
+  SUBNET_CIDR="10.240.0.0/24" \
+  mise run subnets:create
+  ```
+
+  ### With Bruno CLI:
+  ```bash
+  VPC_ID="r006-abc123..." \
+  NEW_SUBNET_NAME="my-subnet" \
+  ZONE_NAME="us-south-1" \
+  SUBNET_CIDR="10.240.0.0/24" \
+  bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod
+  ```
+
+  ### Using different CIDR blocks:
+  ```bash
+  # Small subnet for testing (64 IPs)
+  SUBNET_CIDR="10.240.1.0/26" mise run subnets:create
+
+  # Medium subnet (256 IPs) - recommended for most workloads
+  SUBNET_CIDR="10.240.2.0/24" mise run subnets:create
+
+  # Large subnet (512 IPs)
+  SUBNET_CIDR="10.240.4.0/23" mise run subnets:create
+  ```
+
+  ## Alternative: Create by IP Count
+  If you prefer to specify the number of IPs instead of CIDR block,
+  use the `create-subnet-by-count.bru` file instead.
+
+  ## Response (201 Created):
+  Returns the created subnet object with:
+  - id: Subnet ID (starts with r006-)
+  - name: Subnet name
+  - status: Current status (pending, available, deleting, failed)
+  - ipv4_cidr_block: The assigned CIDR block
+  - total_ipv4_address_count: Total IPs in subnet
+  - available_ipv4_address_count: Available IPs (total - 4 reserved)
+  - vpc: Parent VPC reference
+  - zone: Availability zone
+  - network_acl: Network ACL details
+  - routing_table: Routing table details
+  - public_gateway: Public gateway (if attached)
+
+  ## Common Status Codes:
+  - 201: Subnet created successfully
+  - 400: Invalid CIDR block or parameters
+  - 401: Authentication failed (check bearer token)
+  - 404: VPC not found
+  - 409: Subnet name conflict or CIDR overlap
+  - 422: CIDR not in VPC address prefix range
+
+  ## CIDR Block Requirements:
+  - Must be within the VPC's address prefix range
+  - Cannot overlap with existing subnets
+  - Must be a valid IPv4 CIDR notation
+  - Minimum size: /28 (16 IPs)
+  - For VPCs with "auto" address prefix management, CIDR is validated automatically
+
+  ## Zone Names by Region:
+  - us-south: us-south-1, us-south-2, us-south-3
+  - us-east: us-east-1, us-east-2, us-east-3
+  - eu-gb: eu-gb-1, eu-gb-2, eu-gb-3
+  - eu-de: eu-de-1, eu-de-2, eu-de-3
+  - jp-tok: jp-tok-1, jp-tok-2, jp-tok-3
+  - au-syd: au-syd-1, au-syd-2, au-syd-3
+
+  ## Next Steps After Creation:
+  1. Save the subnet ID from the response
+  2. (Optional) Attach a public gateway for internet access
+  3. Create security groups
+  4. Provision instances in the subnet
+
+  ## API Reference:
+  https://cloud.ibm.com/apidocs/vpc/latest#create-subnet
+}

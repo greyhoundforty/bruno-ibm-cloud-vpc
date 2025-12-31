@@ -1,0 +1,266 @@
+meta {
+  name: Create Security Group
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{vpc_endpoint}}/v1/security_groups?version={{api_version}}&generation=2
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+body:json {
+  {
+    "name": "{{NEW_SG_NAME}}",
+    "vpc": {
+      "id": "{{vpc_id}}"
+    }
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const sg = res.body;
+    console.log(`\n✅ Security Group Created Successfully!`);
+    console.log(`\n=== Security Group Details ===`);
+    console.log(`Name: ${sg.name}`);
+    console.log(`ID: ${sg.id}`);
+    console.log(`CRN: ${sg.crn}`);
+    console.log(`Created: ${sg.created_at}`);
+
+    console.log(`\n--- Location & Organization ---`);
+    console.log(`VPC: ${sg.vpc?.name || 'N/A'} (${sg.vpc?.id || 'N/A'})`);
+    console.log(`Resource Group: ${sg.resource_group?.name || 'N/A'} (${sg.resource_group?.id || 'N/A'})`);
+
+    console.log(`\n--- Default Rules ---`);
+    if (sg.rules && sg.rules.length > 0) {
+      console.log(`Security group created with ${sg.rules.length} default rule(s):`);
+      sg.rules.forEach((rule, index) => {
+        console.log(`\n  Rule ${index + 1}:`);
+        console.log(`    Direction: ${rule.direction}`);
+        console.log(`    Protocol: ${rule.protocol}`);
+        if (rule.remote) {
+          if (rule.remote.cidr_block) {
+            console.log(`    Remote: ${rule.remote.cidr_block}`);
+          } else if (rule.remote.id) {
+            console.log(`    Remote Security Group: ${rule.remote.id}`);
+          }
+        }
+      });
+    } else {
+      console.log(`No default rules (security group created empty)`);
+      console.log(`Note: Empty security groups deny all traffic by default`);
+    }
+
+    console.log(`\n--- Next Steps ---`);
+    console.log(`1. Add inbound SSH rule (port 22):`);
+    console.log(`   SECURITY_GROUP_ID=${sg.id} mise run security-groups:add-ssh`);
+    console.log(`2. Add inbound HTTP rule (port 80):`);
+    console.log(`   SECURITY_GROUP_ID=${sg.id} mise run security-groups:add-http`);
+    console.log(`3. Add inbound HTTPS rule (port 443):`);
+    console.log(`   SECURITY_GROUP_ID=${sg.id} mise run security-groups:add-https`);
+    console.log(`4. Add outbound all rule (allow internet access):`);
+    console.log(`   SECURITY_GROUP_ID=${sg.id} mise run security-groups:add-outbound`);
+    console.log(`5. View this security group:`);
+    console.log(`   SECURITY_GROUP_ID=${sg.id} mise run security-groups:get`);
+    console.log(`6. Create instances using this security group:`);
+    console.log(`   SECURITY_GROUP_ID=${sg.id} SUBNET_ID=<subnet-id> mise run instances:create`);
+
+    console.log(`\n💡 Tip: Security groups are stateful - return traffic is automatically allowed`);
+    console.log(`💡 Tip: Use --output json flag to see full JSON response`);
+
+  } else if (res.status === 400) {
+    console.error(`\n❌ Bad Request (400)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid request parameters'}`);
+    console.error(`\nCheck:`);
+    console.error(`- Security group name is valid`);
+    console.error(`- VPC ID is correct`);
+  } else if (res.status === 401) {
+    console.error("\n❌ Token expired - run 'mise run auth' again");
+  } else if (res.status === 404) {
+    console.error(`\n❌ Not Found (404)`);
+    console.error(`VPC not found - check VPC_ID environment variable`);
+    console.error(`Run 'mise run vpc:list' to see available VPCs`);
+  } else if (res.status === 409) {
+    console.error(`\n❌ Conflict (409)`);
+    console.error(`Security group name already exists in this VPC`);
+    console.error(`Choose a different name or use an existing security group`);
+  } else if (res.status === 422) {
+    console.error(`\n❌ Validation Error (422)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid parameters'}`);
+  } else {
+    console.error(`\n❌ Error: ${res.status} - ${res.statusText}`);
+    if (res.body.errors) {
+      console.error(`Details: ${JSON.stringify(res.body.errors, null, 2)}`);
+    }
+  }
+}
+
+docs {
+  # Create Security Group
+
+  Creates a new security group in a VPC. Security groups act as virtual firewalls
+  controlling inbound and outbound traffic to resources.
+
+  ## Prerequisites:
+  - Valid IBM Cloud API key (IBM_API_KEY environment variable)
+  - Existing VPC ID
+  - Security groups are created empty - you must add rules separately
+
+  ## Environment Variables Required:
+  - NEW_SG_NAME: Name for the new security group (e.g., "web-servers-sg")
+  - VPC_ID: Parent VPC ID (e.g., "r006-abc123...")
+
+  ## Optional Environment Variables:
+  - RESOURCE_GROUP_ID: Resource group ID (uses VPC's resource group if not specified)
+
+  ## Request Body Fields:
+
+  ### Required:
+  - name (string): Security group name (must be unique within VPC)
+  - vpc.id (string): Parent VPC ID
+
+  ### Optional:
+  - resource_group.id (string): Resource group for the security group
+  - tags (array): Tags for organization and billing
+  - access_tags (array): Access management tags
+
+  ## Security Group Behavior:
+
+  **Default Behavior:**
+  - New security groups are created EMPTY (no rules)
+  - Empty security groups DENY all inbound traffic
+  - Empty security groups DENY all outbound traffic
+  - You must add rules to allow traffic
+
+  **Stateful Firewall:**
+  - Security groups are stateful
+  - Return traffic for allowed connections is automatically permitted
+  - Example: Allow inbound port 22 → outbound responses automatically allowed
+
+  **Common Rule Patterns:**
+  After creating a security group, add rules for:
+  1. SSH access (port 22) for management
+  2. HTTP (port 80) and/or HTTPS (port 443) for web traffic
+  3. Outbound all traffic (0.0.0.0/0) for internet access
+  4. Custom application ports as needed
+
+  ## Usage Examples:
+
+  ### With mise (recommended):
+  ```bash
+  VPC_ID="r006-abc123..." \
+  NEW_SG_NAME="web-tier-sg" \
+  mise run security-groups:create
+  ```
+
+  ### With Bruno CLI:
+  ```bash
+  VPC_ID="r006-abc123..." \
+  NEW_SG_NAME="web-tier-sg" \
+  bru run auth/get-iam-token.bru vpc/security-groups/create-security-group.bru --env prod
+  ```
+
+  ### Different security group types:
+  ```bash
+  # Web servers (will add HTTP/HTTPS rules)
+  NEW_SG_NAME="web-servers-sg" mise run security-groups:create
+
+  # Application servers (will add custom app port rules)
+  NEW_SG_NAME="app-tier-sg" mise run security-groups:create
+
+  # Database servers (will add database port rules)
+  NEW_SG_NAME="database-sg" mise run security-groups:create
+
+  # Bastion/Jump hosts (will add SSH rule)
+  NEW_SG_NAME="bastion-sg" mise run security-groups:create
+  ```
+
+  ## Response (201 Created):
+  Returns the created security group object with:
+  - id: Security group ID (starts with r006-)
+  - name: Security group name
+  - crn: Cloud Resource Name
+  - vpc: Parent VPC reference
+  - resource_group: Resource group details
+  - rules: Array of rules (empty for new security groups)
+  - created_at: Creation timestamp
+
+  ## Common Status Codes:
+  - 201: Security group created successfully
+  - 400: Invalid parameters
+  - 401: Authentication failed (check bearer token)
+  - 404: VPC not found
+  - 409: Security group name already exists in VPC
+  - 422: Validation error
+
+  ## Next Steps After Creation:
+
+  ### 1. Add Rules (Required for Traffic)
+  ```bash
+  # SSH access from anywhere
+  SECURITY_GROUP_ID=<sg-id> mise run security-groups:add-ssh
+
+  # HTTP traffic
+  SECURITY_GROUP_ID=<sg-id> mise run security-groups:add-http
+
+  # HTTPS traffic
+  SECURITY_GROUP_ID=<sg-id> mise run security-groups:add-https
+
+  # Outbound internet access
+  SECURITY_GROUP_ID=<sg-id> mise run security-groups:add-outbound
+  ```
+
+  ### 2. Attach to Resources
+  - Specify security group ID when creating instances
+  - Attach to existing instance network interfaces
+  - Associate with load balancers
+
+  ### 3. View Security Group
+  ```bash
+  SECURITY_GROUP_ID=<sg-id> mise run security-groups:get
+  ```
+
+  ## Security Best Practices:
+
+  **Principle of Least Privilege:**
+  - Only allow necessary ports and protocols
+  - Use specific CIDR blocks instead of 0.0.0.0/0 when possible
+  - Separate tiers (web, app, database) into different security groups
+
+  **Common Patterns:**
+  - Web tier: Allow 80, 443 inbound; Allow all outbound
+  - App tier: Allow app port from web tier SG; Allow outbound to DB tier
+  - Database tier: Allow DB port from app tier SG only; Deny all outbound
+
+  **Management Access:**
+  - Restrict SSH (port 22) to specific IP ranges or bastion hosts
+  - Use bastion/jump hosts for SSH access to private instances
+  - Never expose database ports (3306, 5432, etc.) to 0.0.0.0/0
+
+  ## Important Notes:
+
+  1. **Security groups are VPC-scoped** - Each VPC has its own security groups
+  2. **Rule changes take effect immediately** - No restart required
+  3. **Multiple security groups** - Resources can have up to 5 security groups
+  4. **Default security group** - Every VPC has a default security group created automatically
+  5. **Stateful tracking** - Return traffic allowed automatically for established connections
+
+  ## API Reference:
+  https://cloud.ibm.com/apidocs/vpc/latest#create-security-group
+}

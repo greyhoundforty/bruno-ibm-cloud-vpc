@@ -7,18 +7,35 @@ This is a Bruno API collection for interacting with the IBM Cloud VPC REST API. 
 ## Project Structure
 
 ```
-ibm-cloud-vpc/
-├── bruno.json                    # Collection metadata
+bruno-ibm-cloud-vpc/
+├── bruno.json                              # Collection metadata
+├── .mise.toml                              # Task automation configuration
 ├── environments/
-│   ├── dev.bru                  # Development environment (API key, region, endpoints)
-│   └── prod.bru                 # Production environment
+│   ├── dev.bru                            # Development environment
+│   └── prod.bru                           # Production environment (default)
 ├── auth/
-│   └── get-iam-token.bru        # IAM authentication (API key → Bearer token)
+│   └── get-iam-token.bru                  # IAM authentication (API key → Bearer token)
 └── vpc/
-    ├── list-vpcs.bru            # GET all VPCs
-    ├── get-vpc.bru              # GET specific VPC by ID
-    └── subnets/
-        └── list-subnets.bru     # GET all subnets (with filters)
+    ├── create-vpc.bru                     # POST - Create VPC
+    ├── list-vpcs.bru                      # GET - List all VPCs
+    ├── get-vpc.bru                        # GET - Get specific VPC by ID
+    ├── subnets/
+    │   ├── create-subnet.bru              # POST - Create subnet (IP count method, default)
+    │   ├── create-subnet-by-cidr.bru      # POST - Create subnet (CIDR method, alternative)
+    │   ├── list-subnets.bru               # GET - List all subnets
+    │   └── get-subnet.bru                 # GET - Get specific subnet with resource details
+    ├── security-groups/
+    │   ├── list-security-groups.bru       # GET - List all security groups
+    │   └── get-security-group.bru         # GET - Get specific security group
+    ├── instances/
+    │   ├── list-instances.bru             # GET - List all instances
+    │   └── get-instance.bru               # GET - Get specific instance
+    ├── floating-ips/
+    │   ├── list-floating-ips.bru          # GET - List all floating IPs
+    │   └── get-floating-ip.bru            # GET - Get specific floating IP
+    └── load-balancers/
+        ├── list-load-balancers.bru        # GET - List all load balancers
+        └── get-load-balancer.bru          # GET - Get specific load balancer
 ```
 
 ## Key Concepts
@@ -363,6 +380,25 @@ When generating new `.bru` files or Python scripts:
 - **Repository accessibility improved**: Lower barrier to entry, no need to install/learn fnox to get started
 - **All changes committed and pushed**: 3 commits total, repository fully updated
 
+### 2024-12-31 - VPC Creation & Subnet Creation Implementation
+- **Created VPC creation endpoint** (`vpc/create-vpc.bru`): First POST endpoint with comprehensive verbose output
+- **VPC creation tested successfully**: 201 Created response, displays all VPC details, default resources, CSE IPs, next steps
+- **Environment variables added**: NEW_VPC_NAME, RESOURCE_GROUP_ID to both prod.bru and dev.bru
+- **Mise task added**: vpc:create with automatic authentication flow
+- **Created subnet creation endpoints** (2 methods):
+  - **Primary method** (`vpc/subnets/create-subnet.bru`): Uses total_ipv4_address_count (IP count)
+  - **Alternative method** (`vpc/subnets/create-subnet-by-cidr.bru`): Uses ipv4_cidr_block (CIDR)
+- **IP count method made default**: Most users prefer letting IBM Cloud auto-assign CIDR blocks
+- **Subnet IP count validation**: Must be power of 2, valid range 8 ≤ value ≤ 8,388,608
+- **Enhanced get-subnet.bru**: Categorizes reserved IPs by resource type (instances, load balancers, VPN, other)
+- **Instance detection in subnets**: Shows network interface IDs with helpful commands to get full instance details
+- **Environment variables added**: NEW_SUBNET_NAME, ZONE_NAME, SUBNET_CIDR, SUBNET_IP_COUNT
+- **Mise tasks added**: subnets:create (IP count), subnets:create-by-cidr (CIDR alternative)
+- **Fixed Bruno variable case sensitivity**: vpc_id (Bruno var) vs VPC_ID (OS env var) - must match in .bru files
+- **Fixed JavaScript environment variable access**: Environment vars not directly accessible in post-response scripts - removed variable references from error messages
+- **Subnet creation tested successfully**: 256 IP subnet created with auto-assigned CIDR block
+- **Comprehensive documentation**: Both methods fully documented with validation ranges, examples, when to use each
+
 ## What Worked
 
 ✅ **Bruno post-response scripts**: JavaScript formatting works perfectly for displaying API responses
@@ -376,77 +412,45 @@ When generating new `.bru` files or Python scripts:
 ✅ **Standard naming conventions**: `IBM_API_KEY`, `prod.bru`, `dev.bru` are more intuitive than custom names
 ✅ **Git-friendly plain text**: All .bru files are human-readable and easy to version control
 ✅ **GitHub integration**: gh CLI makes repository creation and management seamless
+✅ **Multiple creation methods**: Offering both IP count and CIDR methods gives users flexibility
+✅ **IP count as default**: Auto-assigned CIDR blocks simplify subnet creation for most use cases
+✅ **Categorized resource display**: Grouping reserved IPs by type (instances, LBs, VPN) improves readability
 
 ## What Didn't Work / Challenges
 
 ⚠️ **Bruno syntax strict rules**: Comments not allowed in params/headers/vars blocks (must use docs block)
 ⚠️ **CSE IP structure**: Initially showed "undefined" until correct path (`cse.ip?.address`) was found
 ⚠️ **Region field**: VPC get endpoint returns region as object but name is sometimes missing (shows "N/A")
+⚠️ **Bruno variable case sensitivity**: Environment file variable names (e.g., `vpc_id`) must match exactly when referenced in templates (`{{vpc_id}}`), not the OS env var name (`VPC_ID`)
+⚠️ **JavaScript environment variable access**: Environment variables NOT directly accessible in post-response scripts - cannot use `${NEW_SUBNET_NAME}` directly, must avoid or use `bru.getEnvVar()`
+⚠️ **409 Conflict on retry**: Subnet names must be unique - failed attempts leave resources that need different names on retry
 
 ## Next Steps for Next Session
 
-### ✅ Completed in This Session
+### ✅ Completed
 
 - ✅ All 13 GET endpoints (1 auth + 6 list + 6 get)
+- ✅ VPC creation endpoint (vpc/create-vpc.bru) - tested and working
+- ✅ Subnet creation endpoints (2 methods):
+  - ✅ IP count method (default): create-subnet.bru
+  - ✅ CIDR method (alternative): create-subnet-by-cidr.bru
+- ✅ Enhanced get-subnet.bru with instance/resource categorization
 - ✅ Comprehensive README.md and documentation
 - ✅ GitHub repository created and published
 - ✅ fnox made optional (not required)
 - ✅ Standardized naming (IBM_API_KEY, prod.bru, dev.bru)
-- ✅ Mise task automation for all read operations
+- ✅ Mise task automation for all read and create operations
 
-### 🎯 Session 2: Resource Creation (POST Endpoints)
+### 🎯 Next Session: Continue Resource Creation (POST Endpoints)
 
-**Goal**: Implement POST endpoints for creating VPC resources with proper request bodies and validation.
+**Goal**: Continue implementing POST endpoints for VPC resources.
 
 **Priority Order** (following VPC dependency chain):
 
-#### 1. Create VPC (`vpc/create-vpc.bru`)
-**IBM Cloud API**: `POST /v1/vpcs`
-**Required Body Parameters**:
-- `name` (string): VPC name
-- `resource_group.id` (string, optional): Resource group ID
-- `address_prefix_management` (string, optional): "auto" or "manual"
-- `classic_access` (boolean, optional): Enable classic infrastructure access
+#### 1. ~~Create VPC~~ ✅ DONE
+#### 2. ~~Create Subnet~~ ✅ DONE (2 methods: IP count and CIDR)
 
-**Implementation Plan**:
-- Use `body:json` block in .bru file
-- Add environment variables: `NEW_VPC_NAME`, `RESOURCE_GROUP_ID`
-- Post-response script: Extract VPC ID and save to environment
-- Success output: Display VPC ID, name, default security group, network ACL
-- Mise task: `vpc:create`
-
-**Example JSON Body**:
-```json
-{
-  "name": "{{NEW_VPC_NAME}}",
-  "resource_group": {
-    "id": "{{RESOURCE_GROUP_ID}}"
-  },
-  "address_prefix_management": "auto"
-}
-```
-
-#### 2. Create Subnet (`vpc/subnets/create-subnet.bru`)
-**IBM Cloud API**: `POST /v1/subnets`
-**Required Body Parameters**:
-- `name` (string): Subnet name
-- `vpc.id` (string): Parent VPC ID
-- `zone.name` (string): Zone (e.g., "us-south-1")
-- `ipv4_cidr_block` (string): IP range (e.g., "10.240.0.0/24")
-
-**Implementation Plan**:
-- Requires VPC ID from previous create-vpc or list-vpcs
-- Add CIDR validation helper in docs block
-- Environment variables: `NEW_SUBNET_NAME`, `VPC_ID`, `ZONE_NAME`, `SUBNET_CIDR`
-- Post-response script: Display subnet details with available IP count
-- Mise task: `subnets:create`
-
-**CIDR Helper Notes** (in docs block):
-- /24 = 256 IPs (251 usable, 5 reserved by IBM)
-- /25 = 128 IPs (123 usable)
-- /26 = 64 IPs (59 usable)
-
-#### 3. Create Security Group (`vpc/security-groups/create-security-group.bru`)
+#### 3. Create Security Group (`vpc/security-groups/create-security-group.bru`) - NEXT
 **IBM Cloud API**: `POST /v1/security_groups`
 **Required Body Parameters**:
 - `name` (string): Security group name

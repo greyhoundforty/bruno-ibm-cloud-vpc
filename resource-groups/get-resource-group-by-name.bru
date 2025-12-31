@@ -1,0 +1,181 @@
+meta {
+  name: Get Resource Group by Name
+  type: http
+  seq: 2
+}
+
+get {
+  url: https://resource-controller.cloud.ibm.com/v2/resource_groups?name={{RESOURCE_GROUP_NAME}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  name: {{RESOURCE_GROUP_NAME}}
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const groups = res.body.resources;
+
+    if (groups.length === 0) {
+      console.error(`\n❌ No resource group found with name: ${bru.getEnvVar('RESOURCE_GROUP_NAME')}`);
+      console.error(`\nRun 'mise run resource-groups:list' to see all available resource groups`);
+      return;
+    }
+
+    if (groups.length > 1) {
+      console.error(`\n⚠️  Warning: Multiple resource groups found (${groups.length})`);
+      console.error(`This should not happen - resource group names should be unique\n`);
+    }
+
+    const group = groups[0];
+    console.log(`\n✅ Resource Group Found!`);
+    console.log(`\nName: ${group.name}`);
+    console.log(`ID: ${group.id}`);
+    console.log(`State: ${group.state}`);
+    console.log(`Default: ${group.default || false}`);
+    console.log(`Created: ${group.created_at}`);
+
+    console.log(`\n--- Copy this ID for use in other commands ---`);
+    console.log(`export RESOURCE_GROUP_ID="${group.id}"`);
+
+    console.log(`\n--- Or use directly in commands ---`);
+    console.log(`# Create VPC in this resource group:`);
+    console.log(`RESOURCE_GROUP_ID="${group.id}" NEW_VPC_NAME="my-vpc" mise run vpc:create`);
+
+    console.log(`\n# Create subnet in this resource group:`);
+    console.log(`RESOURCE_GROUP_ID="${group.id}" ... mise run subnets:create`);
+
+    console.log(`\n# Create security group in this resource group:`);
+    console.log(`RESOURCE_GROUP_ID="${group.id}" ... mise run security-groups:create`);
+
+    console.log(`\n💡 Tip: Save this ID in your shell for multiple commands:`);
+    console.log(`   export RESOURCE_GROUP_ID="${group.id}"`);
+
+  } else if (res.status === 401) {
+    console.error("\n❌ Token expired - run 'mise run auth' again");
+  } else {
+    console.error(`\n❌ Error: ${res.status} - ${res.statusText}`);
+    if (res.body.errors) {
+      console.error(`Details: ${JSON.stringify(res.body.errors, null, 2)}`);
+    }
+  }
+}
+
+docs {
+  # Get Resource Group by Name
+
+  Retrieves a specific resource group by name and displays its ID for use in
+  other commands. This is a helper endpoint to convert resource group names
+  to IDs automatically.
+
+  ## Prerequisites:
+  - Valid IBM Cloud API key (IBM_API_KEY environment variable)
+  - IAM bearer token (automatically obtained by mise tasks)
+
+  ## Environment Variables Required:
+  - RESOURCE_GROUP_NAME: Name of the resource group (e.g., "Default", "production")
+
+  ## Usage Examples:
+
+  ### With mise (recommended):
+  ```bash
+  # Find the "Default" resource group
+  RESOURCE_GROUP_NAME="Default" mise run resource-groups:get-by-name
+
+  # Find a custom resource group
+  RESOURCE_GROUP_NAME="production" mise run resource-groups:get-by-name
+
+  # Find and export the ID in one command
+  export RESOURCE_GROUP_ID=$(RESOURCE_GROUP_NAME="Default" \
+    mise run resource-groups:get-by-name | grep "export RESOURCE_GROUP_ID" | cut -d'"' -f2)
+  ```
+
+  ### With Bruno CLI:
+  ```bash
+  RESOURCE_GROUP_NAME="Default" \
+    bru run auth/get-iam-token.bru resource-groups/get-resource-group-by-name.bru --env prod
+  ```
+
+  ## How It Works:
+
+  1. Queries the Resource Manager API with the name filter
+  2. Returns matching resource group(s)
+  3. Displays the ID in copy-paste ready format
+  4. Shows example commands using the ID
+
+  ## Response:
+
+  When a resource group is found:
+  - ✅ Shows resource group details (name, ID, state, default status)
+  - 📋 Provides export command for the ID
+  - 💡 Shows example commands using the ID
+
+  When not found:
+  - ❌ Error message with suggestion to list all resource groups
+  - Helpful command: `mise run resource-groups:list`
+
+  ## Common Resource Group Names:
+
+  - **Default** - Every account's default resource group
+  - **production** - Common name for production resources
+  - **development** - Common name for dev/test resources
+  - **staging** - Common name for staging environment
+
+  ## Workflow Example:
+
+  ### Step 1: Find your resource group ID
+  ```bash
+  RESOURCE_GROUP_NAME="Default" mise run resource-groups:get-by-name
+  # Copy the ID from output
+  ```
+
+  ### Step 2: Export for use in multiple commands
+  ```bash
+  export RESOURCE_GROUP_ID="abc123-xyz789-..."
+  ```
+
+  ### Step 3: Create resources in that group
+  ```bash
+  # All these use the exported RESOURCE_GROUP_ID
+  NEW_VPC_NAME="my-vpc" mise run vpc:create
+  NEW_SUBNET_NAME="my-subnet" ... mise run subnets:create
+  NEW_SG_NAME="my-sg" ... mise run security-groups:create
+  ```
+
+  ## Alternative: Inline ID Extraction
+
+  You can also extract and use the ID in a single command:
+  ```bash
+  # Extract just the ID (requires parsing)
+  RESOURCE_GROUP_ID=$(RESOURCE_GROUP_NAME="Default" mise run resource-groups:get-by-name 2>/dev/null | grep "^ID:" | awk '{print $2}')
+
+  # Use in VPC creation
+  RESOURCE_GROUP_ID="$RESOURCE_GROUP_ID" NEW_VPC_NAME="my-vpc" mise run vpc:create
+  ```
+
+  ## Common Status Codes:
+  - 200: Success (resource group found or empty list)
+  - 401: Token expired (re-authenticate)
+  - 403: Insufficient permissions
+  - 404: Not found (no resource group with that name)
+
+  ## Notes:
+
+  1. **Name filtering is case-sensitive** - "Default" ≠ "default"
+  2. **Names should be unique** - but API returns array just in case
+  3. **Default group exists in every account** - Safe to use "Default"
+  4. **Resource group required for most resources** - Good practice to specify
+
+  ## API Reference:
+  https://cloud.ibm.com/apidocs/resource-controller/resource-manager#list-resource-groups
+}
