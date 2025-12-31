@@ -15,15 +15,26 @@ This collection provides ready-to-use API requests for managing IBM Cloud VPC in
 ### Authentication
 - IAM token generation (API key → Bearer token)
 
-### VPC Resources (List & Get)
+### Resource Group Management
+- **List Resource Groups** - List all resource groups in your account
+- **Get by Name** - Find resource group ID by name (for easy lookups)
+
+### VPC Resources (Read Operations)
 - **VPCs** - List all VPCs or get specific VPC details
-- **Subnets** - List all subnets or get specific subnet details
+- **Subnets** - List all subnets or get specific subnet details (with instance categorization)
 - **Security Groups** - List all security groups or get specific group with all rules
 - **Instances (VSIs)** - List all instances or get specific instance details
 - **Floating IPs** - List all floating IPs or get specific IP details
 - **Load Balancers** - List all load balancers or get specific LB details
 
-**Total**: 13 API endpoints (1 auth + 6 list + 6 get)
+### VPC Resources (Create Operations)
+- **Create VPC** - Create a new Virtual Private Cloud
+- **Create Subnet** - Two methods:
+  - IP count method (default) - Specify number of IPs, auto-assign CIDR
+  - CIDR method (alternative) - Specify exact CIDR block
+- **Create Security Group** - Create empty security group (rules added separately)
+
+**Total**: 20 API endpoints (1 auth + 2 resource group + 13 VPC read + 4 VPC create)
 
 ## Prerequisites
 
@@ -164,6 +175,12 @@ bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod
 #### Example 1: Explore Your VPC Infrastructure
 
 ```bash
+# List resource groups
+mise run resource-groups:list
+
+# Find resource group ID by name
+RESOURCE_GROUP_NAME="Default" mise run resource-groups:get-by-name
+
 # Get all VPCs
 mise run vpc:list
 
@@ -173,11 +190,42 @@ VPC_ID=r006-5b0702f8-071f-470c-9eeb-2b25ec4ed148 mise run vpc:get
 # List subnets in that VPC
 mise run subnets:list
 
-# Get details for a specific subnet
+# Get details for a specific subnet (shows instances using IPs)
 SUBNET_ID=r006-abc123... mise run subnets:get
 ```
 
-#### Example 2: Security Audit
+#### Example 2: Create a Complete VPC Environment
+
+```bash
+# Step 1: Get resource group ID
+RESOURCE_GROUP_NAME="Default" mise run resource-groups:get-by-name
+export RESOURCE_GROUP_ID="<id-from-output>"
+
+# Step 2: Create VPC
+NEW_VPC_NAME="my-prod-vpc" mise run vpc:create
+export VPC_ID="<vpc-id-from-output>"
+
+# Step 3: Create subnet with 256 IPs (auto-assigned CIDR)
+NEW_SUBNET_NAME="web-tier-subnet" \
+ZONE_NAME="us-south-1" \
+SUBNET_IP_COUNT=256 \
+mise run subnets:create
+
+# Alternative: Create subnet with specific CIDR
+NEW_SUBNET_NAME="app-tier-subnet" \
+ZONE_NAME="us-south-2" \
+SUBNET_CIDR="10.240.1.0/24" \
+mise run subnets:create-by-cidr
+
+# Step 4: Create security group
+NEW_SG_NAME="web-servers-sg" mise run security-groups:create
+export SECURITY_GROUP_ID="<sg-id-from-output>"
+
+# Step 5: View your new security group (no rules yet)
+mise run security-groups:get
+```
+
+#### Example 3: Security Audit
 
 ```bash
 # List all security groups
@@ -187,7 +235,7 @@ mise run security-groups:list
 SECURITY_GROUP_ID=r006-21f41a31-5f3d-4b92-a048-e22856d9743d mise run security-groups:get
 ```
 
-#### Example 3: Instance Inventory
+#### Example 4: Instance Inventory
 
 ```bash
 # List all running instances
@@ -201,53 +249,95 @@ INSTANCE_ID=r006-xyz789... mise run instances:get
 
 Run `mise tasks` to see all available commands:
 
+### Authentication
 ```
-auth                    - Get IBM Cloud IAM token
-vpc:list                - List all VPCs
-vpc:get                 - Get specific VPC by ID
-subnets:list            - List all subnets
-subnets:get             - Get specific subnet by ID
-security-groups:list    - List all security groups
-security-groups:get     - Get specific security group by ID
-instances:list          - List all instances (VSIs)
-instances:get           - Get specific instance by ID
-floating-ips:list       - List all floating IPs
-floating-ips:get        - Get specific floating IP by ID
-load-balancers:list     - List all load balancers
-load-balancers:get      - Get specific load balancer by ID
+auth                           - Get IBM Cloud IAM token
+```
+
+### Resource Groups
+```
+resource-groups:list           - List all resource groups
+resource-groups:get-by-name    - Get resource group ID by name (set RESOURCE_GROUP_NAME)
+```
+
+### VPC Operations
+```
+vpc:list                       - List all VPCs
+vpc:get                        - Get specific VPC by ID (set VPC_ID)
+vpc:create                     - Create new VPC (set NEW_VPC_NAME, optionally RESOURCE_GROUP_ID)
+```
+
+### Subnet Operations
+```
+subnets:list                   - List all subnets
+subnets:get                    - Get specific subnet by ID (set SUBNET_ID)
+subnets:create                 - Create subnet with IP count (set NEW_SUBNET_NAME, VPC_ID, ZONE_NAME, SUBNET_IP_COUNT)
+subnets:create-by-cidr         - Create subnet with CIDR block (set NEW_SUBNET_NAME, VPC_ID, ZONE_NAME, SUBNET_CIDR)
+```
+
+### Security Group Operations
+```
+security-groups:list           - List all security groups
+security-groups:get            - Get specific security group by ID (set SECURITY_GROUP_ID)
+security-groups:create         - Create security group (set NEW_SG_NAME, VPC_ID)
+```
+
+### Instance Operations
+```
+instances:list                 - List all instances (VSIs)
+instances:get                  - Get specific instance by ID (set INSTANCE_ID)
+```
+
+### Floating IP Operations
+```
+floating-ips:list              - List all floating IPs
+floating-ips:get               - Get specific floating IP by ID (set FLOATING_IP_ID)
+```
+
+### Load Balancer Operations
+```
+load-balancers:list            - List all load balancers
+load-balancers:get             - Get specific load balancer by ID (set LOAD_BALANCER_ID)
 ```
 
 ## Project Structure
 
 ```
 bruno-ibm-cloud-vpc/
-├── README.md                       # This file
-├── CLAUDE.md                       # Development log and technical details
-├── bruno.json                      # Collection metadata
-├── .mise.toml                      # Task automation configuration
+├── README.md                              # This file
+├── CLAUDE.md                              # Development log and technical details
+├── bruno.json                             # Collection metadata
+├── .mise.toml                             # Task automation configuration
 ├── environments/
-│   ├── prod.bru                    # Production environment (default)
-│   └── dev.bru                     # Development environment
+│   ├── prod.bru                           # Production environment (default)
+│   └── dev.bru                            # Development environment
 ├── auth/
-│   └── get-iam-token.bru           # IAM authentication
+│   └── get-iam-token.bru                  # IAM authentication
+├── resource-groups/
+│   ├── list-resource-groups.bru           # List all resource groups
+│   └── get-resource-group-by-name.bru     # Get RG ID by name
 └── vpc/
-    ├── get-vpc.bru                 # Get specific VPC
-    ├── list-vpcs.bru               # List all VPCs
+    ├── create-vpc.bru                     # Create VPC
+    ├── list-vpcs.bru                      # List all VPCs
+    ├── get-vpc.bru                        # Get specific VPC
+    ├── subnets/
+    │   ├── create-subnet.bru              # Create subnet (IP count method)
+    │   ├── create-subnet-by-cidr.bru      # Create subnet (CIDR method)
+    │   ├── list-subnets.bru               # List all subnets
+    │   └── get-subnet.bru                 # Get subnet with resource details
     ├── security-groups/
-    │   ├── list-security-groups.bru
-    │   └── get-security-group.bru
+    │   ├── create-security-group.bru      # Create security group
+    │   ├── list-security-groups.bru       # List all security groups
+    │   └── get-security-group.bru         # Get security group with rules
     ├── instances/
-    │   ├── list-instances.bru
-    │   └── get-instance.bru
+    │   ├── list-instances.bru             # List all instances
+    │   └── get-instance.bru               # Get specific instance
     ├── floating-ips/
-    │   ├── list-floating-ips.bru
-    │   └── get-floating-ip.bru
-    ├── load-balancers/
-    │   ├── list-load-balancers.bru
-    │   └── get-load-balancer.bru
-    └── subnets/
-        ├── list-subnets.bru
-        └── get-subnet.bru
+    │   ├── list-floating-ips.bru          # List all floating IPs
+    │   └── get-floating-ip.bru            # Get specific floating IP
+    └── load-balancers/
+        ├── list-load-balancers.bru        # List all load balancers
+        └── get-load-balancer.bru          # Get specific load balancer
 ```
 
 ## Environment Configuration
