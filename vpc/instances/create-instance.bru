@@ -1,0 +1,412 @@
+meta {
+  name: Create Instance
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{vpc_endpoint}}/v1/instances?version={{api_version}}&generation=2
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+body:json {
+  {
+    "name": "{{NEW_INSTANCE_NAME}}",
+    "vpc": {
+      "id": "{{vpc_id}}"
+    },
+    "zone": {
+      "name": "{{ZONE_NAME}}"
+    },
+    "profile": {
+      "name": "{{PROFILE_NAME}}"
+    },
+    "image": {
+      "id": "{{IMAGE_ID}}"
+    },
+    "primary_network_interface": {
+      "name": "eth0",
+      "subnet": {
+        "id": "{{subnet_id}}"
+      },
+      "security_groups": [
+        {
+          "id": "{{security_group_id}}"
+        }
+      ]
+    },
+    "keys": [
+      {
+        "id": "{{ssh_key_id}}"
+      }
+    ],
+    "resource_group": {
+      "id": "{{RESOURCE_GROUP_ID}}"
+    }
+  }
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const instance = res.body;
+    console.log(`\n✅ Instance Created Successfully!`);
+    console.log(`\n=== Instance Details ===`);
+    console.log(`Name: ${instance.name}`);
+    console.log(`ID: ${instance.id}`);
+    console.log(`Status: ${instance.status}`);
+    console.log(`CRN: ${instance.crn}`);
+    console.log(`Created: ${instance.created_at}`);
+
+    console.log(`\n--- Compute Configuration ---`);
+    console.log(`Profile: ${instance.profile?.name || 'N/A'}`);
+    console.log(`vCPUs: ${instance.vcpu?.count || 'N/A'} (${instance.vcpu?.architecture || 'N/A'})`);
+    console.log(`Memory: ${instance.memory || 'N/A'} GB`);
+    console.log(`Bandwidth: ${instance.bandwidth || 'N/A'} Mbps`);
+
+    console.log(`\n--- Location ---`);
+    console.log(`Zone: ${instance.zone?.name || 'N/A'}`);
+    console.log(`VPC: ${instance.vpc?.name || 'N/A'} (${instance.vpc?.id || 'N/A'})`);
+    console.log(`Resource Group: ${instance.resource_group?.name || 'N/A'}`);
+
+    console.log(`\n--- Operating System ---`);
+    console.log(`Image: ${instance.image?.name || 'N/A'}`);
+    console.log(`OS: ${instance.image?.operating_system?.display_name || 'N/A'}`);
+
+    console.log(`\n--- Network Configuration ---`);
+    const nic = instance.primary_network_interface;
+    if (nic) {
+      console.log(`Primary Network Interface:`);
+      console.log(`  Name: ${nic.name || 'N/A'}`);
+      console.log(`  Private IP: ${nic.primary_ip?.address || 'Pending'}`);
+      console.log(`  Subnet: ${nic.subnet?.name || 'N/A'} (${nic.subnet?.id || 'N/A'})`);
+      if (nic.security_groups && nic.security_groups.length > 0) {
+        console.log(`  Security Groups:`);
+        nic.security_groups.forEach(sg => {
+          console.log(`    - ${sg.name || 'N/A'} (${sg.id || 'N/A'})`);
+        });
+      }
+    }
+
+    if (instance.boot_volume_attachment) {
+      console.log(`\n--- Boot Volume ---`);
+      const boot = instance.boot_volume_attachment;
+      console.log(`Name: ${boot.volume?.name || 'N/A'}`);
+      console.log(`Size: ${boot.volume?.capacity || 'N/A'} GB`);
+      console.log(`IOPS: ${boot.volume?.iops || 'N/A'}`);
+      console.log(`Profile: ${boot.volume?.profile?.name || 'N/A'}`);
+    }
+
+    console.log(`\n--- Status Timeline ---`);
+    console.log(`Current: ${instance.status}`);
+    console.log(`Expected progression: pending → starting → running`);
+    console.log(`\n💡 Instance provisioning takes 3-5 minutes`);
+    console.log(`   Check status with: INSTANCE_ID=${instance.id} mise run instances:get`);
+
+    console.log(`\n--- Next Steps ---`);
+    console.log(`\n1. Wait for instance to reach "running" status (3-5 minutes):`);
+    console.log(`   watch -n 10 "INSTANCE_ID=${instance.id} mise run instances:get"`);
+
+    console.log(`\n2. Create and attach a floating IP for external access:`);
+    console.log(`   NEW_FIP_NAME="${instance.name}-fip" ZONE_NAME="${instance.zone?.name || 'ZONE'}" mise run floating-ips:create`);
+    console.log(`   Then attach to instance primary network interface`);
+
+    console.log(`\n3. Connect via SSH once floating IP is attached:`);
+    console.log(`   ssh root@<FLOATING_IP>  # For most Linux distributions`);
+    console.log(`   ssh ubuntu@<FLOATING_IP>  # For Ubuntu`);
+    console.log(`   ssh redhat@<FLOATING_IP>  # For Red Hat`);
+
+    console.log(`\n4. View instance details:`);
+    console.log(`   INSTANCE_ID=${instance.id} mise run instances:get`);
+
+    console.log(`\n5. Delete instance when done testing:`);
+    console.log(`   INSTANCE_ID=${instance.id} mise run instances:delete`);
+
+    console.log(`\n💡 Tips:`);
+    console.log(`   - Instance charges begin immediately (even if pending)`);
+    console.log(`   - Use --output json flag to see full JSON response`);
+    console.log(`   - Keep the instance ID for all future operations`);
+    console.log(`   - Configure security group rules for required ports (HTTP, HTTPS, etc.)`);
+
+  } else if (res.status === 400) {
+    console.error(`\n❌ Bad Request (400)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid request parameters'}`);
+    console.error(`\nCommon issues:`);
+    console.error(`- Invalid VPC ID, subnet ID, or security group ID`);
+    console.error(`- Invalid zone name (must match subnet zone)`);
+    console.error(`- Invalid profile name (use: mise run instances:list-profiles)`);
+    console.error(`- Invalid image ID (use: mise run instances:list-images)`);
+    console.error(`- Invalid SSH key ID (use: mise run ssh-keys:list)`);
+  } else if (res.status === 401) {
+    console.error("\n❌ Token expired - run 'mise run auth' again");
+  } else if (res.status === 409) {
+    console.error(`\n❌ Conflict (409)`);
+    console.error(`An instance with this name already exists in this VPC`);
+    console.error(`Choose a different name or delete the existing instance`);
+  } else if (res.status === 422) {
+    console.error(`\n❌ Validation Error (422)`);
+    console.error(`Error: ${res.body.errors?.[0]?.message || 'Invalid parameters'}`);
+    console.error(`\nCheck:`);
+    console.error(`- All required fields are provided`);
+    console.error(`- Subnet zone matches instance zone`);
+    console.error(`- Security group belongs to same VPC`);
+    console.error(`- Profile exists and is available in zone`);
+  } else {
+    console.error(`\n❌ Error: ${res.status} - ${res.statusText}`);
+    if (res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || err}`);
+      });
+    }
+  }
+}
+
+docs {
+  # Create Instance (Virtual Server Instance)
+
+  Creates a new virtual server instance (VSI) in IBM Cloud VPC.
+  This is the most complex VPC resource to create, requiring coordination of multiple resources.
+
+  ## Prerequisites:
+
+  1. **VPC** - Created and available
+  2. **Subnet** - Created in target zone with available IPs
+  3. **Security Group** - Created (can use VPC default)
+  4. **SSH Key** - Uploaded to IBM Cloud (for Linux instances)
+  5. **Resource Group** - ID or use default
+
+  ## Required Environment Variables:
+
+  - NEW_INSTANCE_NAME: Name for the instance (e.g., "web-server-01")
+  - VPC_ID: Parent VPC ID (from vpc:list or vpc:create)
+  - ZONE_NAME: Availability zone (e.g., "us-south-1", must match subnet zone)
+  - PROFILE_NAME: Instance profile (e.g., "cx2-2x4", from instances:list-profiles)
+  - IMAGE_ID: OS image ID (from instances:list-images)
+  - SUBNET_ID: Subnet ID (from subnets:list, must be in same zone)
+  - SECURITY_GROUP_ID: Security group ID (from security-groups:list)
+  - SSH_KEY_ID: SSH key ID (from ssh-keys:list, required for Linux)
+  - RESOURCE_GROUP_ID: Resource group ID (optional, uses default if omitted)
+
+  ## Getting Required IDs:
+
+  ```bash
+  # 1. List and select VPC
+  mise run vpc:list
+  export VPC_ID="r006-abc123..."
+
+  # 2. List and select subnet (must be in target zone)
+  mise run subnets:list
+  export SUBNET_ID="r006-def456..."
+
+  # 3. List and select security group
+  mise run security-groups:list
+  export SECURITY_GROUP_ID="r006-ghi789..."
+
+  # 4. List instance profiles (recommended: cx2-2x4 for dev, cx2-4x8 for prod)
+  mise run instances:list-profiles
+  export PROFILE_NAME="cx2-2x4"
+
+  # 5. List images (recommended: Ubuntu 22.04 LTS)
+  mise run instances:list-images
+  export IMAGE_ID="r006-jkl012..."
+
+  # 6. List SSH keys (required for Linux instances)
+  mise run ssh-keys:list
+  export SSH_KEY_ID="r006-mno345..."
+
+  # 7. Get resource group ID (optional)
+  mise run resource-groups:list
+  export RESOURCE_GROUP_ID="pqr678..."
+  ```
+
+  ## Usage Examples:
+
+  ### Minimal Example (Ubuntu, 2 vCPU, 4 GB RAM):
+  ```bash
+  NEW_INSTANCE_NAME="my-ubuntu-server" \
+  VPC_ID="r006-..." \
+  ZONE_NAME="us-south-1" \
+  PROFILE_NAME="cx2-2x4" \
+  IMAGE_ID="r006-..." \
+  SUBNET_ID="r006-..." \
+  SECURITY_GROUP_ID="r006-..." \
+  SSH_KEY_ID="r006-..." \
+  mise run instances:create
+  ```
+
+  ### Production Example (Ubuntu, 4 vCPU, 8 GB RAM, specific resource group):
+  ```bash
+  NEW_INSTANCE_NAME="prod-web-01" \
+  VPC_ID="r006-..." \
+  ZONE_NAME="us-south-1" \
+  PROFILE_NAME="cx2-4x8" \
+  IMAGE_ID="r006-..." \
+  SUBNET_ID="r006-..." \
+  SECURITY_GROUP_ID="r006-..." \
+  SSH_KEY_ID="r006-..." \
+  RESOURCE_GROUP_ID="..." \
+  mise run instances:create
+  ```
+
+  ## Request Body Structure:
+
+  ```json
+  {
+    "name": "my-instance",
+    "vpc": {"id": "r006-..."},
+    "zone": {"name": "us-south-1"},
+    "profile": {"name": "cx2-2x4"},
+    "image": {"id": "r006-..."},
+    "primary_network_interface": {
+      "name": "eth0",
+      "subnet": {"id": "r006-..."},
+      "security_groups": [{"id": "r006-..."}]
+    },
+    "keys": [{"id": "r006-..."}],
+    "resource_group": {"id": "..."}
+  }
+  ```
+
+  ## Instance Profiles (Compute Configurations):
+
+  **Development/Testing:**
+  - cx2-2x4 (2 vCPU, 4 GB) - Small apps, testing
+  - bx2-2x8 (2 vCPU, 8 GB) - Medium apps
+
+  **Production:**
+  - cx2-4x8 (4 vCPU, 8 GB) - Web apps
+  - bx2-4x16 (4 vCPU, 16 GB) - Heavy traffic
+
+  **Database:**
+  - mx2-4x32 (4 vCPU, 32 GB) - Small to medium DB
+  - mx2-8x64 (8 vCPU, 64 GB) - Large DB
+
+  ## Operating System Images:
+
+  **Recommended for Most Users:**
+  - Ubuntu 22.04 LTS - Modern, well-supported, 5 years updates
+  - Debian 12 - Stable, minimal, lightweight
+
+  **Enterprise:**
+  - Red Hat Enterprise Linux 9 - Enterprise support
+  - Windows Server 2022 - Latest Windows
+
+  ## Response (201 Created):
+
+  Returns the created instance object with:
+  - id: Instance ID (use for all future operations)
+  - name, status, created_at
+  - vpc, zone, resource_group references
+  - profile: Compute configuration details
+  - image: OS image details
+  - primary_network_interface: Network config with private IP
+  - boot_volume_attachment: Boot volume details
+  - vcpu, memory, bandwidth: Compute specs
+
+  ## Instance Status Progression:
+
+  1. **pending** - Instance creation initiated
+  2. **starting** - Instance booting up
+  3. **running** - Instance ready for use (3-5 minutes from creation)
+  4. **stopping** - Shutting down (if stopped)
+  5. **stopped** - Powered off
+  6. **failed** - Creation failed (check logs)
+
+  ## Common Status Codes:
+
+  - 201: Instance created successfully
+  - 400: Invalid request (check all IDs, zone matching)
+  - 401: Authentication failed
+  - 409: Instance name conflict
+  - 422: Validation error (zone mismatch, invalid profile, etc.)
+
+  ## Important Notes:
+
+  1. **Zone Matching**: Instance zone must match subnet zone
+  2. **VPC Matching**: Subnet and security group must be in same VPC
+  3. **Provisioning Time**: Instances take 3-5 minutes to reach "running" status
+  4. **Billing**: Charges begin immediately when instance is created
+  5. **SSH Keys**: Required for Linux instances, used automatically on first boot
+  6. **Boot Volume**: Automatically created (100 GB default)
+  7. **Private IP**: Assigned automatically from subnet CIDR
+  8. **Floating IP**: Not assigned by default, create separately for external access
+
+  ## Connecting to Instance:
+
+  After instance reaches "running" status:
+
+  1. **Create floating IP:**
+     ```bash
+     mise run floating-ips:create
+     # Note the floating IP address
+     ```
+
+  2. **Attach floating IP to instance** (via console or API)
+
+  3. **Configure security group** to allow SSH (port 22):
+     ```bash
+     SECURITY_GROUP_ID="r006-..." SSH_SOURCE_CIDR="0.0.0.0/0" mise run security-groups:add-ssh
+     ```
+
+  4. **SSH to instance:**
+     ```bash
+     ssh root@<FLOATING_IP>        # Most distributions
+     ssh ubuntu@<FLOATING_IP>      # Ubuntu
+     ssh redhat@<FLOATING_IP>      # Red Hat
+     ```
+
+  ## Troubleshooting:
+
+  **"Zone mismatch" error:**
+  - Ensure subnet zone matches ZONE_NAME
+  - List subnet details: SUBNET_ID="..." mise run subnets:get
+
+  **"Invalid profile" error:**
+  - Profile may not be available in selected zone
+  - List profiles: mise run instances:list-profiles
+
+  **"Invalid image" error:**
+  - Image ID may be incorrect or deprecated
+  - List images: mise run instances:list-images
+
+  **"Invalid SSH key" error:**
+  - SSH key must be uploaded first
+  - List keys: mise run ssh-keys:list
+  - Create key: ibmcloud is key-create my-key @~/.ssh/id_rsa.pub
+
+  **Instance stuck in "pending":**
+  - Check IBM Cloud status page for outages
+  - Verify quota limits (instance count, vCPU, memory)
+  - Contact IBM support if pending > 10 minutes
+
+  ## Cost Considerations:
+
+  Instance costs include:
+  - **Compute**: Based on profile (vCPU + memory)
+  - **Boot Volume**: 100 GB default (can customize)
+  - **Networking**: Data transfer, floating IPs
+  - **Location**: Pricing varies by region
+
+  Example costs (us-south, approximate):
+  - cx2-2x4: ~$40-50/month
+  - cx2-4x8: ~$80-100/month
+  - mx2-4x32: ~$150-200/month
+
+  ## API Reference:
+
+  https://cloud.ibm.com/apidocs/vpc/latest#create-instance
+}

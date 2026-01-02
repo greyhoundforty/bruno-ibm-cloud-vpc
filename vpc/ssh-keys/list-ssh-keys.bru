@@ -1,0 +1,175 @@
+meta {
+  name: List SSH Keys
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/keys?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const keys = res.body.keys;
+    console.log(`Found ${keys.length} SSH key(s):`);
+    console.log('');
+
+    if (keys.length === 0) {
+      console.log('⚠️  No SSH keys found!');
+      console.log('');
+      console.log('You need to create an SSH key before provisioning instances.');
+      console.log('');
+      console.log('Options:');
+      console.log('  1. IBM Cloud CLI: ibmcloud is key-create my-key @~/.ssh/id_rsa.pub');
+      console.log('  2. IBM Cloud Console: VPC Infrastructure > SSH keys > Create');
+      console.log('  3. Bruno: Use ssh-keys:create endpoint (if available)');
+      console.log('');
+    } else {
+      keys.forEach(key => {
+        console.log(`  - ${key.name} (${key.id})`);
+        console.log(`    Type: ${key.type || 'N/A'}`);
+        console.log(`    Length: ${key.length || 'N/A'} bits`);
+        console.log(`    Fingerprint: ${key.fingerprint || 'N/A'}`);
+        console.log(`    Created: ${key.created_at}`);
+        console.log('');
+      });
+
+      console.log('💡 TIP: Copy the SSH key ID for instance creation');
+      console.log('💡 Set SSH_KEY_ID environment variable:');
+      console.log(`   export SSH_KEY_ID="${keys[0].id}"`);
+    }
+
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  }
+}
+
+docs {
+  # List SSH Keys
+
+  Returns all SSH public keys registered in your IBM Cloud VPC account.
+  SSH keys are required for accessing Linux instances after provisioning.
+
+  ## What are SSH Keys?
+
+  SSH keys provide secure, password-less authentication for accessing virtual server instances.
+  When you create an instance, IBM Cloud injects the public key into the instance's authorized_keys file.
+  You use your corresponding private key to SSH into the instance.
+
+  ## Key Types:
+  - **rsa**: RSA keys (2048, 3072, or 4096 bits) - Most common, widely supported
+  - **ed25519**: EdDSA keys (256 bits) - Modern, more secure, shorter keys
+  - **ecdsa**: ECDSA keys (256, 384, or 521 bits) - Less common
+
+  ## Query Parameters:
+  - version: API version (required)
+  - generation: Always use "2" for VPC Gen2
+  - resource_group.id: Filter by resource group (optional)
+
+  ## Response Fields:
+  - id: SSH key ID (use this when creating instance)
+  - name: Human-readable key name
+  - type: Key algorithm (rsa, ed25519, ecdsa)
+  - length: Key length in bits
+  - fingerprint: Key fingerprint (SHA256)
+  - public_key: Full public key string
+  - resource_group: Associated resource group
+  - created_at: When key was added
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+
+  ## Creating SSH Keys:
+
+  **If you don't have an SSH key pair yet:**
+
+  1. Generate new key pair on your local machine:
+     ```bash
+     # RSA 4096-bit (most compatible)
+     ssh-keygen -t rsa -b 4096 -C "your-email@example.com" -f ~/.ssh/ibm_cloud_rsa
+
+     # Ed25519 (modern, recommended)
+     ssh-keygen -t ed25519 -C "your-email@example.com" -f ~/.ssh/ibm_cloud_ed25519
+     ```
+
+  2. Upload public key to IBM Cloud:
+     ```bash
+     # Via IBM Cloud CLI
+     ibmcloud is key-create my-key @~/.ssh/ibm_cloud_rsa.pub
+
+     # Via IBM Cloud Console
+     VPC Infrastructure > SSH keys > Create
+     ```
+
+  **If you already have an SSH key:**
+
+  1. Find your public key:
+     ```bash
+     cat ~/.ssh/id_rsa.pub
+     cat ~/.ssh/id_ed25519.pub
+     ```
+
+  2. Upload to IBM Cloud via CLI or Console (see above)
+
+  ## Using SSH Keys with Instances:
+
+  After creating an instance with an SSH key:
+  ```bash
+  # Get instance public IP
+  FLOATING_IP="169.xx.xx.xx"  # From instance details
+
+  # SSH using default key
+  ssh root@$FLOATING_IP
+
+  # SSH using specific key
+  ssh -i ~/.ssh/ibm_cloud_rsa root@$FLOATING_IP
+
+  # For Ubuntu instances
+  ssh -i ~/.ssh/ibm_cloud_rsa ubuntu@$FLOATING_IP
+  ```
+
+  ## Security Best Practices:
+
+  1. **Use Ed25519 or RSA 4096-bit**: Stronger encryption
+  2. **Protect private keys**: Never share or commit to git
+  3. **Use key passphrases**: Add extra layer of security
+  4. **Rotate keys periodically**: Replace old keys every 6-12 months
+  5. **One key per environment**: Separate dev/staging/production keys
+  6. **Remove unused keys**: Delete old keys from IBM Cloud
+
+  ## Troubleshooting:
+
+  **"Permission denied (publickey)" error:**
+  - Verify correct private key: `ssh -i ~/.ssh/correct_key user@ip`
+  - Check key permissions: `chmod 600 ~/.ssh/private_key`
+  - Verify public key uploaded to IBM Cloud
+  - Confirm username (root, ubuntu, redhat, etc.)
+
+  **Multiple keys:**
+  - SSH tries all keys in ~/.ssh/ by default
+  - Specify exact key: `ssh -i ~/.ssh/specific_key user@ip`
+  - Configure SSH config file (~/.ssh/config)
+
+  ## Next Steps:
+  After confirming SSH keys exist:
+  1. Copy SSH key ID: export SSH_KEY_ID="r006-abc123..."
+  2. List instance profiles: mise run instances:list-profiles
+  3. List images: mise run instances:list-images
+  4. Create instance: mise run instances:create
+}

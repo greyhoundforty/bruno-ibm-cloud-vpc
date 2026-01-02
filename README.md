@@ -1,116 +1,96 @@
 # IBM Cloud VPC Bruno API Collection
 
-A Git-friendly API collection for the IBM Cloud VPC REST API using [Bruno](https://www.usebruno.com/), a modern API client that stores requests as plain text files instead of binary formats.
+A Git-friendly API collection for IBM Cloud VPC REST API using [Bruno](https://www.usebruno.com/). Store and version control your API requests as plain text `.bru` files.
 
-## What is This?
+## Features
 
-This collection provides ready-to-use API requests for managing IBM Cloud VPC infrastructure via the command line. All requests are stored as `.bru` files, making them:
-- ✅ **Version control friendly** - Plain text files you can commit to Git
-- ✅ **CLI-first** - Run from terminal using `bru run` commands
-- ✅ **Simple setup** - Just set environment variables and go
-- ✅ **Self-documenting** - Each request includes comprehensive documentation
+- **Version Control Friendly** - Plain text files perfect for Git
+- **CLI-First** - Run directly with `bru run` commands
+- **Self-Documenting** - Each request includes comprehensive inline documentation
+- **Zero Dependencies** - Just Bruno CLI and your API key
+- **Optional Task Automation** - Mise integration available for convenience
 
 ## What's Included
 
-### Authentication
-- IAM token generation (API key → Bearer token)
+### Core Operations
+- **Authentication** - IAM token generation (API key to Bearer token)
+- **Resource Groups** - List and lookup by name
+- **VPCs** - List, get details, create
+- **Subnets** - List, get details, create (IP count or CIDR methods)
+- **Security Groups** - List, get details, create, add rules (SSH, HTTP, HTTPS)
+- **Instances** - List, get details, create (with profiles and images)
+- **Floating IPs** - List and get details
+- **Load Balancers** - List and get details
 
-### Resource Group Management
-- **List Resource Groups** - List all resource groups in your account
-- **Get by Name** - Find resource group ID by name (for easy lookups)
+### Advanced Features
+- **Pagination** - Handle large result sets with cursor-based pagination
+- **Error Handling** - Python examples with retry logic and exponential backoff
+- **Workflow Automation** - Chain requests to create complete infrastructures
+- **Batch Operations** - Create multiple resources programmatically
 
-### VPC Resources (Read Operations)
-- **VPCs** - List all VPCs or get specific VPC details
-- **Subnets** - List all subnets or get specific subnet details (with instance categorization)
-- **Security Groups** - List all security groups or get specific group with all rules
-- **Instances (VSIs)** - List all instances or get specific instance details
-- **Floating IPs** - List all floating IPs or get specific IP details
-- **Load Balancers** - List all load balancers or get specific LB details
-
-### VPC Resources (Create Operations)
-- **Create VPC** - Create a new Virtual Private Cloud
-- **Create Subnet** - Two methods:
-  - IP count method (default) - Specify number of IPs, auto-assign CIDR
-  - CIDR method (alternative) - Specify exact CIDR block
-- **Create Security Group** - Create empty security group
-- **Add Security Group Rules** - Six rule creation methods:
-  - Self-reference inbound (allow traffic from same security group)
-  - Outbound all (allow all outbound traffic)
-  - SSH (port 22) with configurable source CIDR
-  - HTTP (port 80) for web servers
-  - HTTPS (port 443) for secure web servers
-  - Custom rules (advanced - full parameter control)
-
-**Total**: 26 API endpoints (1 auth + 2 resource group + 13 VPC read + 4 VPC create + 1 SG create + 6 SG rules)
+**Total Endpoints**: 30+ (covering complete VPC lifecycle)
 
 ## Prerequisites
 
-1. **Bruno CLI** - API client
-   ```bash
-   npm install -g @usebruno/cli
-   ```
+### Required
 
-2. **IBM Cloud API Key** - Create one at [IBM Cloud IAM](https://cloud.ibm.com/iam/apikeys)
+```bash
+# Bruno CLI
+npm install -g @usebruno/cli
 
-### Optional Tools
+# Verify installation
+bru --version
+```
 
-- **mise** - Task runner for shorter commands (see "Using Mise Task Runner" section)
-- **fnox** - Encrypted secret management (alternative to plain environment variables)
+### Get IBM Cloud API Key
+
+Create an API key at [IBM Cloud IAM](https://cloud.ibm.com/iam/apikeys)
 
 ## Quick Start
 
-### 1. Clone the Repository
+### 1. Set Your API Key
 
 ```bash
-git clone https://github.com/greyhoundforty/bruno-ibm-cloud-vpc.git
-cd bruno-ibm-cloud-vpc
+export IBM_API_KEY="your-ibm-cloud-api-key"
 ```
 
-### 2. Configure Your API Key
-
-Set your IBM Cloud API key as an environment variable:
-
+For persistence, add to your shell profile (`~/.bashrc`, `~/.zshrc`):
 ```bash
-export IBM_API_KEY="your-ibm-cloud-api-key-here"
-```
-
-To make it permanent, add to your shell profile (`~/.bashrc`, `~/.zshrc`, etc.):
-```bash
-echo 'export IBM_API_KEY="your-ibm-cloud-api-key-here"' >> ~/.bashrc
+echo 'export IBM_API_KEY="your-api-key"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
-**Optional**: If you prefer encrypted secret management, you can use [fnox](https://github.com/anthropics/fnox) instead of plain environment variables.
-
-### 3. Test Authentication
-
-Get an IAM bearer token (valid for 1 hour):
+### 2. Test Authentication
 
 ```bash
 bru run auth/get-iam-token.bru --env prod
 ```
 
-You should see:
+Success output:
 ```
-✓ IAM token obtained successfully
+IAM token obtained successfully
 Token expires in: 3600 seconds
 ```
 
-### 4. List Your VPCs
+### 3. List Your VPCs
 
 ```bash
 bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod
 ```
 
-You should see all VPCs in your IBM Cloud account with names, IDs, and status.
+## Bruno Command Usage
 
-**💡 Tip**: Running multiple `.bru` files in one command (auth + request) ensures the bearer token persists between requests.
+### Authentication Pattern
 
-## Usage
+All Bruno commands follow this pattern - authenticate first, then run your request:
 
-### Basic Commands
+```bash
+bru run auth/get-iam-token.bru <request-file> --env prod
+```
 
-All commands follow this pattern: authenticate first, then run your request.
+Running auth and request together ensures the bearer token persists between requests.
+
+### List Resources
 
 ```bash
 # List all VPCs
@@ -122,7 +102,7 @@ bru run auth/get-iam-token.bru vpc/subnets/list-subnets.bru --env prod
 # List all security groups
 bru run auth/get-iam-token.bru vpc/security-groups/list-security-groups.bru --env prod
 
-# List all instances
+# List all instances (virtual servers)
 bru run auth/get-iam-token.bru vpc/instances/list-instances.bru --env prod
 
 # List all floating IPs
@@ -130,374 +110,312 @@ bru run auth/get-iam-token.bru vpc/floating-ips/list-floating-ips.bru --env prod
 
 # List all load balancers
 bru run auth/get-iam-token.bru vpc/load-balancers/list-load-balancers.bru --env prod
+
+# List all resource groups
+bru run auth/get-iam-token.bru resource-groups/list-resource-groups.bru --env prod
 ```
 
-### Getting Specific Resources
+### Get Specific Resources
 
 Use environment variables to pass resource IDs:
 
 ```bash
-# Get specific VPC details
-VPC_ID=r006-abc123... bru run auth/get-iam-token.bru vpc/get-vpc.bru --env prod
+# Get specific VPC
+VPC_ID=r006-abc123 bru run auth/get-iam-token.bru vpc/get-vpc.bru --env prod
+
+# Get specific subnet
+SUBNET_ID=r006-def456 bru run auth/get-iam-token.bru vpc/subnets/get-subnet.bru --env prod
 
 # Get specific security group with all rules
-SECURITY_GROUP_ID=r006-xyz789... bru run auth/get-iam-token.bru vpc/security-groups/get-security-group.bru --env prod
+SECURITY_GROUP_ID=r006-xyz789 bru run auth/get-iam-token.bru vpc/security-groups/get-security-group.bru --env prod
 
-# Get specific instance details
-INSTANCE_ID=r006-def456... bru run auth/get-iam-token.bru vpc/instances/get-instance.bru --env prod
-
-# Get specific subnet with resource usage
-SUBNET_ID=r006-mno678... bru run auth/get-iam-token.bru vpc/subnets/get-subnet.bru --env prod
+# Get specific instance
+INSTANCE_ID=r006-mno345 bru run auth/get-iam-token.bru vpc/instances/get-instance.bru --env prod
 ```
 
-### Resource Group Management
+### Create Resources
 
+#### Create VPC
 ```bash
-# List all resource groups
-bru run auth/get-iam-token.bru resource-groups/list-resource-groups.bru --env prod
-
-# Get resource group ID by name
-RESOURCE_GROUP_NAME="Default" bru run auth/get-iam-token.bru resource-groups/get-resource-group-by-name.bru --env prod
+NEW_VPC_NAME="production-vpc" RESOURCE_GROUP_ID="abc123" \
+  bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod
 ```
 
-### Common Workflow Examples
-
-#### Example 1: Explore Your VPC Infrastructure
-
+#### Create Subnet
 ```bash
-# List resource groups
-bru run auth/get-iam-token.bru resource-groups/list-resource-groups.bru --env prod
+# Method 1: IP count (recommended - auto-assigns CIDR)
+NEW_SUBNET_NAME="web-subnet" \
+  VPC_ID="r006-abc" \
+  ZONE_NAME="us-south-1" \
+  SUBNET_IP_COUNT=256 \
+  bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod
 
-# Find resource group ID by name
-RESOURCE_GROUP_NAME="Default" bru run auth/get-iam-token.bru resource-groups/get-resource-group-by-name.bru --env prod
-
-# Get all VPCs
-bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod
-
-# Get details for a specific VPC (copy ID from list output)
-VPC_ID=r006-5b0702f8-071f-470c-9eeb-2b25ec4ed148 bru run auth/get-iam-token.bru vpc/get-vpc.bru --env prod
-
-# List subnets in that VPC
-bru run auth/get-iam-token.bru vpc/subnets/list-subnets.bru --env prod
-
-# Get details for a specific subnet (shows instances using IPs)
-SUBNET_ID=r006-abc123... bru run auth/get-iam-token.bru vpc/subnets/get-subnet.bru --env prod
+# Method 2: Specific CIDR block
+NEW_SUBNET_NAME="app-subnet" \
+  VPC_ID="r006-abc" \
+  ZONE_NAME="us-south-2" \
+  SUBNET_CIDR="10.240.1.0/24" \
+  bru run auth/get-iam-token.bru vpc/subnets/create-subnet-by-cidr.bru --env prod
 ```
 
-#### Example 2: Create a Complete VPC Environment
+#### Create Security Group
+```bash
+NEW_SG_NAME="web-servers" VPC_ID="r006-abc" \
+  bru run auth/get-iam-token.bru vpc/security-groups/create-security-group.bru --env prod
+```
+
+#### Add Security Group Rules
+```bash
+# Allow SSH (customize source CIDR for security)
+SECURITY_GROUP_ID="r006-xyz" SSH_SOURCE_CIDR="203.0.113.0/24" \
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-ssh.bru --env prod
+
+# Allow HTTPS
+SECURITY_GROUP_ID="r006-xyz" \
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-https.bru --env prod
+
+# Allow HTTP
+SECURITY_GROUP_ID="r006-xyz" \
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-http.bru --env prod
+
+# Allow all outbound traffic
+SECURITY_GROUP_ID="r006-xyz" \
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-outbound-all.bru --env prod
+
+# Allow instances in same security group to communicate
+SECURITY_GROUP_ID="r006-xyz" \
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-self.bru --env prod
+```
+
+#### Create Instance
+```bash
+# First, list available options
+bru run auth/get-iam-token.bru vpc/instances/list-instance-profiles.bru --env prod
+bru run auth/get-iam-token.bru vpc/instances/list-images.bru --env prod
+bru run auth/get-iam-token.bru vpc/ssh-keys/list-ssh-keys.bru --env prod
+
+# Then create instance
+NEW_INSTANCE_NAME="web-server-01" \
+  VPC_ID="r006-abc" \
+  ZONE_NAME="us-south-1" \
+  PROFILE_NAME="cx2-2x4" \
+  IMAGE_ID="r006-img-ubuntu" \
+  SUBNET_ID="r006-subnet" \
+  SECURITY_GROUP_ID="r006-sg" \
+  SSH_KEY_ID="r006-key" \
+  bru run auth/get-iam-token.bru vpc/instances/create-instance.bru --env prod
+```
+
+### Pagination for Large Result Sets
 
 ```bash
-# Step 1: Get resource group ID
-RESOURCE_GROUP_NAME="Default" bru run auth/get-iam-token.bru resource-groups/get-resource-group-by-name.bru --env prod
+# First page (default limit: 50)
+bru run auth/get-iam-token.bru vpc/list-vpcs-paginated.bru --env prod
+
+# Custom page size
+PAGINATION_LIMIT=10 bru run auth/get-iam-token.bru vpc/list-vpcs-paginated.bru --env prod
+
+# Next page (use START_TOKEN from previous response)
+START_TOKEN="abc123..." PAGINATION_LIMIT=10 \
+  bru run auth/get-iam-token.bru vpc/list-vpcs-paginated.bru --env prod
+```
+
+## Complete Workflow Example
+
+Create a complete VPC environment with subnets, security groups, and rules:
+
+```bash
+# 1. Get resource group ID
+RESOURCE_GROUP_NAME="Default" \
+  bru run auth/get-iam-token.bru resource-groups/get-resource-group-by-name.bru --env prod
 export RESOURCE_GROUP_ID="<id-from-output>"
 
-# Step 2: Create VPC
-NEW_VPC_NAME="my-prod-vpc" bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod
+# 2. Create VPC
+NEW_VPC_NAME="production-vpc" RESOURCE_GROUP_ID=$RESOURCE_GROUP_ID \
+  bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod
 export VPC_ID="<vpc-id-from-output>"
 
-# Step 3: Create subnet with 256 IPs (auto-assigned CIDR)
-NEW_SUBNET_NAME="web-tier-subnet" \
-ZONE_NAME="us-south-1" \
-SUBNET_IP_COUNT=256 \
-bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod
+# 3. Create subnets in different zones
+NEW_SUBNET_NAME="web-tier-zone1" VPC_ID=$VPC_ID ZONE_NAME="us-south-1" SUBNET_IP_COUNT=256 \
+  bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod
+export SUBNET_1_ID="<subnet-id-from-output>"
 
-# Alternative: Create subnet with specific CIDR
-NEW_SUBNET_NAME="app-tier-subnet" \
-ZONE_NAME="us-south-2" \
-SUBNET_CIDR="10.240.1.0/24" \
-bru run auth/get-iam-token.bru vpc/subnets/create-subnet-by-cidr.bru --env prod
+NEW_SUBNET_NAME="web-tier-zone2" VPC_ID=$VPC_ID ZONE_NAME="us-south-2" SUBNET_IP_COUNT=256 \
+  bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod
+export SUBNET_2_ID="<subnet-id-from-output>"
 
-# Step 4: Create security group
-NEW_SG_NAME="web-servers-sg" bru run auth/get-iam-token.bru vpc/security-groups/create-security-group.bru --env prod
+# 4. Create security group
+NEW_SG_NAME="web-servers" VPC_ID=$VPC_ID \
+  bru run auth/get-iam-token.bru vpc/security-groups/create-security-group.bru --env prod
 export SECURITY_GROUP_ID="<sg-id-from-output>"
 
-# Step 5: Add default security group rules
-# Allow instances in same security group to communicate
-SECURITY_GROUP_ID="<sg-id-from-output>" bru run auth/get-iam-token.bru vpc/security-groups/add-rule-self.bru --env prod
+# 5. Add security group rules
+SECURITY_GROUP_ID=$SECURITY_GROUP_ID \
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-self.bru --env prod
 
-# Allow all outbound traffic (for package updates, etc.)
-SECURITY_GROUP_ID="<sg-id-from-output>" bru run auth/get-iam-token.bru vpc/security-groups/add-rule-outbound-all.bru --env prod
+SECURITY_GROUP_ID=$SECURITY_GROUP_ID \
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-outbound-all.bru --env prod
 
-# Step 6: Add application-specific rules
-# Allow SSH from your office IP (replace with your IP)
-SECURITY_GROUP_ID="<sg-id-from-output>" \
-SSH_SOURCE_CIDR="203.0.113.0/24" \
-bru run auth/get-iam-token.bru vpc/security-groups/add-rule-ssh.bru --env prod
+SECURITY_GROUP_ID=$SECURITY_GROUP_ID SSH_SOURCE_CIDR="203.0.113.0/24" \
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-ssh.bru --env prod
 
-# Allow HTTPS for web servers
-SECURITY_GROUP_ID="<sg-id-from-output>" bru run auth/get-iam-token.bru vpc/security-groups/add-rule-https.bru --env prod
+SECURITY_GROUP_ID=$SECURITY_GROUP_ID \
+  bru run auth/get-iam-token.bru vpc/security-groups/add-rule-https.bru --env prod
 
-# Step 7: View your configured security group with all rules
-SECURITY_GROUP_ID="<sg-id-from-output>" bru run auth/get-iam-token.bru vpc/security-groups/get-security-group.bru --env prod
-```
-
-#### Example 3: Security Audit
-
-```bash
-# List all security groups
-bru run auth/get-iam-token.bru vpc/security-groups/list-security-groups.bru --env prod
-
-# Get detailed rules for a specific security group
-SECURITY_GROUP_ID=r006-21f41a31-5f3d-4b92-a048-e22856d9743d bru run auth/get-iam-token.bru vpc/security-groups/get-security-group.bru --env prod
-```
-
-#### Example 4: Instance Inventory
-
-```bash
-# List all running instances
-bru run auth/get-iam-token.bru vpc/instances/list-instances.bru --env prod
-
-# Get full details for a specific instance
-INSTANCE_ID=r006-xyz789... bru run auth/get-iam-token.bru vpc/instances/get-instance.bru --env prod
+# 6. Verify configuration
+SECURITY_GROUP_ID=$SECURITY_GROUP_ID \
+  bru run auth/get-iam-token.bru vpc/security-groups/get-security-group.bru --env prod
 ```
 
 ## Environment Configuration
 
-Two environment files are provided:
+Two environment files are available:
 
-### Production Environment (`environments/prod.bru`) - Default
-- Used by default in all mise tasks (`--env prod`)
-- Configure for your production IBM Cloud account
+- **environments/prod.bru** (default) - Production account, us-south region
+- **environments/dev.bru** - Development/testing, ca-tor region
 
-### Development Environment (`environments/dev.bru`)
-- Alternative environment for testing
-- Use by specifying `--env dev` in Bruno CLI commands
-- Example: `bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env dev`
+Switch environments with the `--env` flag:
+```bash
+bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env dev
+```
 
-Both environment files contain:
+## Using Mise (Optional Convenience)
 
-- `ibm_api_key` - Your IBM Cloud API key (from `IBM_API_KEY` environment variable)
-- `region` - IBM Cloud region (default: `us-south`)
-- `vpc_endpoint` - VPC API endpoint (auto-constructed)
-- `iam_endpoint` - IAM token endpoint
-- `bearer_token` - Auto-populated after authentication
-- `api_version` - IBM Cloud VPC API version (current: `2024-12-10`)
-- Resource IDs - `vpc_id`, `security_group_id`, `instance_id`, etc. (passed via environment variables)
+[Mise](https://mise.jdx.dev/) provides shorter command aliases for Bruno requests. All mise tasks run the same `bru` commands shown above, just with abbreviated syntax.
 
-## Authentication Flow
+### Installation
+```bash
+curl https://mise.run | sh
+```
 
-1. **API Key** → Set in `IBM_API_KEY` environment variable
-2. **POST** to `https://iam.cloud.ibm.com/identity/token`
-3. **Receive** Bearer token (valid 1 hour)
-4. **Use** token in `Authorization: Bearer {token}` header for all VPC API calls
+### Example Usage
+```bash
+# Instead of:
+bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod
 
-When you see `401 Unauthorized` errors, re-authenticate:
+# You can use:
+mise run vpc:list
+
+# Instead of:
+NEW_VPC_NAME="my-vpc" bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod
+
+# You can use:
+NEW_VPC_NAME="my-vpc" mise run vpc:create
+```
+
+See [docs/MISE.md](docs/MISE.md) for complete mise task reference.
+
+## Python Automation
+
+The `examples/` directory contains production-ready Python scripts that use `bru` commands via subprocess:
+
+- **pagination_example.py** - Cursor-based pagination for large result sets
+- **error_handling_retry.py** - Automatic retry with exponential backoff
+- **workflow_chaining.py** - Automated multi-step infrastructure creation
+- **python_automation.py** - Inventory, cost estimation, cleanup, topology mapping
+
+Example:
+```python
+import subprocess
+import json
+
+# Run bru command from Python
+result = subprocess.run([
+    "bru", "run",
+    "auth/get-iam-token.bru",
+    "vpc/list-vpcs.bru",
+    "--env", "prod",
+    "--output", "json"
+], capture_output=True, text=True, check=True)
+
+vpcs = json.loads(result.stdout).get("vpcs", [])
+print(f"Found {len(vpcs)} VPCs")
+```
+
+See [examples/README.md](examples/README.md) for complete Python automation guide.
+
+## Troubleshooting
+
+### 401 Unauthorized
+Token expired (1 hour validity). Re-authenticate:
 ```bash
 bru run auth/get-iam-token.bru --env prod
 ```
 
-## Output Examples
-
-### List VPCs Output
-```
-Found 6 VPC(s):
-  - dts-us-south-demo-vpc (r006-5b0702f8-071f-470c-9eeb-2b25ec4ed148)
-    Status: available
-    Region: us-south
-    Created: 2024-11-03T09:48:41Z
-  ...
-```
-
-### Get VPC Output
-```
-=== VPC Details ===
-Name: dts-us-south-demo-vpc
-ID: r006-5b0702f8-071f-470c-9eeb-2b25ec4ed148
-Status: available
-Created: 2024-11-03T09:48:41Z
-
---- Default Resources ---
-Security Group: wick-pauper-sling-confidant (r006-21f41a31...)
-Network ACL: prudent-uniformly-spooky-cognitive (r006-58a95168...)
-Routing Table: each-whacky-waviness-hamstring (r006-78748326...)
-
---- Cloud Service Endpoint Source IPs ---
-  Zone us-south-1: 10.22.12.104
-  Zone us-south-2: 10.12.161.141
-  Zone us-south-3: 10.249.211.112
-```
-
-### Get Security Group Output
-```
-=== Security Group Details ===
-Name: wick-pauper-sling-confidant
-ID: r006-21f41a31-5f3d-4b92-a048-e22856d9743d
-
---- Security Rules (16) ---
-  Rule 1: r006-33cb82d0-56c4-4ea7-8874-8841782ce4b2
-    Direction: outbound
-    Protocol: all
-    IP Version: ipv4
-    Remote: 0.0.0.0/0
-  ...
-```
-
-## Troubleshooting
-
-### Token Expired (401 Unauthorized)
-```bash
-# Re-authenticate to get fresh token
-mise run auth
-```
-
 ### API Key Not Found
 ```bash
-# Check if environment variable is set
+# Check if set
 echo $IBM_API_KEY
 
-# If empty, set it
-export IBM_API_KEY="your-api-key-here"
-
-# Or if using fnox
-fnox list  # Verify fnox has your API key
-fnox set IBM_API_KEY your-api-key-here  # If missing
+# Set if missing
+export IBM_API_KEY="your-api-key"
 ```
 
 ### Bruno Command Not Found
 ```bash
-# Install Bruno CLI
 npm install -g @usebruno/cli
-
-# Verify installation
 bru --version
 ```
 
 ### Resource Not Found (404)
-- Double-check the resource ID (copy from list command output)
-- Verify you're in the correct region (check `environments/prod.bru` or `environments/dev.bru`)
-- Ensure the resource exists in your IBM Cloud account
-- Make sure you're using the correct environment (`--env prod` or `--env dev`)
+- Verify resource ID is correct (copy from list command output)
+- Check you're in the correct region (see environment files)
+- Confirm resource exists in your IBM Cloud account
 
 ### Bruno Parsing Errors
 Bruno has strict syntax rules:
-- ❌ Comments NOT allowed in `params:query`, `params:path`, `headers`, `vars` blocks
-- ✅ Comments ONLY allowed in `docs` and `meta` blocks
+- Comments NOT allowed in `params:query`, `params:path`, `headers`, `vars` blocks
+- Comments ONLY allowed in `docs` and `meta` blocks
 
-## Using Mise Task Runner (Optional)
+## Project Structure
 
-If you prefer shorter commands, you can use [mise](https://mise.jdx.dev/) as a task runner. The `.mise.toml` file defines tasks that automatically handle authentication.
-
-### Installation
-
-```bash
-# Install mise from: https://mise.jdx.dev/getting-started.html
-curl https://mise.run | sh
+```
+bruno-ibm-cloud-vpc/
+├── auth/                    # Authentication
+│   └── get-iam-token.bru
+├── resource-groups/         # Resource group operations
+│   ├── list-resource-groups.bru
+│   └── get-resource-group-by-name.bru
+├── vpc/                     # VPC resources
+│   ├── list-vpcs.bru
+│   ├── list-vpcs-paginated.bru
+│   ├── get-vpc.bru
+│   ├── create-vpc.bru
+│   ├── subnets/            # Subnet operations
+│   ├── security-groups/    # Security group operations
+│   ├── instances/          # Instance operations
+│   ├── ssh-keys/           # SSH key operations
+│   ├── floating-ips/       # Floating IP operations
+│   └── load-balancers/     # Load balancer operations
+├── examples/                # Python automation scripts
+├── docs/                    # Additional documentation
+│   └── MISE.md             # Mise task runner reference
+└── environments/            # Environment configurations
+    ├── prod.bru            # Production (default)
+    └── dev.bru             # Development
 ```
 
-### Available Tasks
+## Documentation
 
-View all available tasks:
-```bash
-mise tasks
-```
-
-### Authentication
-```bash
-mise run auth                          # Get IBM Cloud IAM token
-```
-
-### Resource Groups
-```bash
-mise run resource-groups:list          # List all resource groups
-mise run resource-groups:get-by-name   # Get resource group ID by name (set RESOURCE_GROUP_NAME)
-```
-
-### VPC Operations
-```bash
-mise run vpc:list                      # List all VPCs
-mise run vpc:get                       # Get specific VPC by ID (set VPC_ID)
-mise run vpc:create                    # Create new VPC (set NEW_VPC_NAME, optionally RESOURCE_GROUP_ID)
-```
-
-### Subnet Operations
-```bash
-mise run subnets:list                  # List all subnets
-mise run subnets:get                   # Get specific subnet by ID (set SUBNET_ID)
-mise run subnets:create                # Create subnet with IP count (set NEW_SUBNET_NAME, VPC_ID, ZONE_NAME, SUBNET_IP_COUNT)
-mise run subnets:create-by-cidr        # Create subnet with CIDR block (set NEW_SUBNET_NAME, VPC_ID, ZONE_NAME, SUBNET_CIDR)
-```
-
-### Security Group Operations
-```bash
-mise run security-groups:list          # List all security groups
-mise run security-groups:get           # Get specific security group by ID (set SECURITY_GROUP_ID)
-mise run security-groups:create        # Create security group (set NEW_SG_NAME, VPC_ID)
-mise run security-groups:add-self      # Add self-reference inbound rule (set SECURITY_GROUP_ID)
-mise run security-groups:add-outbound  # Add outbound all rule (set SECURITY_GROUP_ID)
-mise run security-groups:add-ssh       # Add SSH inbound rule (set SECURITY_GROUP_ID, optionally SSH_SOURCE_CIDR)
-mise run security-groups:add-http      # Add HTTP inbound rule (set SECURITY_GROUP_ID)
-mise run security-groups:add-https     # Add HTTPS inbound rule (set SECURITY_GROUP_ID)
-mise run security-groups:add-rule      # Add custom rule (set SECURITY_GROUP_ID, RULE_DIRECTION, RULE_PROTOCOL, REMOTE_CIDR)
-```
-
-### Instance Operations
-```bash
-mise run instances:list                # List all instances (VSIs)
-mise run instances:get                 # Get specific instance by ID (set INSTANCE_ID)
-```
-
-### Floating IP Operations
-```bash
-mise run floating-ips:list             # List all floating IPs
-mise run floating-ips:get              # Get specific floating IP by ID (set FLOATING_IP_ID)
-```
-
-### Load Balancer Operations
-```bash
-mise run load-balancers:list           # List all load balancers
-mise run load-balancers:get            # Get specific load balancer by ID (set LOAD_BALANCER_ID)
-```
-
-### Usage Example
-
-```bash
-# Create a complete VPC environment using mise
-RESOURCE_GROUP_NAME="Default" mise run resource-groups:get-by-name
-export RESOURCE_GROUP_ID="<id-from-output>"
-
-NEW_VPC_NAME="my-vpc" mise run vpc:create
-export VPC_ID="<vpc-id-from-output>"
-
-NEW_SUBNET_NAME="subnet-1" ZONE_NAME="us-south-1" SUBNET_IP_COUNT=256 mise run subnets:create
-NEW_SG_NAME="web-sg" mise run security-groups:create
-
-export SECURITY_GROUP_ID="<sg-id-from-output>"
-SECURITY_GROUP_ID="$SECURITY_GROUP_ID" mise run security-groups:add-self
-SECURITY_GROUP_ID="$SECURITY_GROUP_ID" mise run security-groups:add-outbound
-SECURITY_GROUP_ID="$SECURITY_GROUP_ID" mise run security-groups:add-https
-```
-
-## IBM Cloud VPC API Resources
-
-- **API Reference**: https://cloud.ibm.com/apidocs/vpc
-- **VPC Concepts**: https://cloud.ibm.com/docs/vpc
-- **Regional Endpoints**: https://cloud.ibm.com/docs/vpc?topic=vpc-service-endpoints-for-vpc
-- **API Versioning**: https://cloud.ibm.com/docs/vpc?topic=vpc-api-change-log
-
-## Development
-
-See [CLAUDE.md](./CLAUDE.md) for:
-- Detailed project architecture
-- Development workflow
-- Session logs and changes
-- Bruno syntax rules
-- Integration patterns
-- Future enhancements
+- **[CLAUDE.md](CLAUDE.md)** - Complete project documentation, architecture, session logs
+- **[docs/MISE.md](docs/MISE.md)** - Optional mise task runner reference
+- **[examples/README.md](examples/README.md)** - Python automation guide
+- **[IBM Cloud VPC API](https://cloud.ibm.com/apidocs/vpc)** - Official API reference
 
 ## Contributing
 
-This is a personal API collection, but feel free to:
+Contributions welcome:
 1. Fork the repository
-2. Add new endpoints (follow existing patterns)
+2. Add new endpoints following existing `.bru` patterns
 3. Update documentation
 4. Submit pull requests
 
 ## License
 
-MIT License - Feel free to use and modify for your own IBM Cloud VPC automation needs.
+MIT License
 
 ---
 
-**Last Updated**: December 31, 2024
-**Collection Version**: 1.1
+**Collection Version**: 1.2
 **IBM Cloud VPC API Version**: 2024-12-10
+**Last Updated**: January 2, 2026

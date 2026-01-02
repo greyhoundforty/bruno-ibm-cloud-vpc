@@ -213,27 +213,27 @@ These scripts run automatically after requests complete.
 ## Next Steps / TODO
 
 ### Immediate Additions
-- [ ] Add `vpc/security-groups/list-security-groups.bru`
-- [ ] Add `vpc/instances/list-instances.bru`
-- [ ] Add `vpc/floating-ips/list-floating-ips.bru`
-- [ ] Add `vpc/load-balancers/list-load-balancers.bru`
+- [x] Add `vpc/security-groups/list-security-groups.bru`
+- [x] Add `vpc/instances/list-instances.bru`
+- [x] Add `vpc/floating-ips/list-floating-ips.bru`
+- [x] Add `vpc/load-balancers/list-load-balancers.bru`
 
 ### Resource Creation (POST requests)
-- [ ] Create VPC
-- [ ] Create subnet with CIDR calculation
-- [ ] Create security group with rules
-- [ ] Provision VSI (virtual server instance)
+- [x] Create VPC
+- [x] Create subnet with CIDR calculation
+- [x] Create security group with rules
+- [x] Provision VSI (virtual server instance)
 
 ### Advanced Features
-- [ ] Pagination handling for large result sets
-- [ ] Error handling and retry logic
-- [ ] Request chaining (create VPC → create subnet → create instance)
-- [ ] Export to Python/Shell scripts using Bruno's codegen
+- [x] Pagination handling for large result sets
+- [x] Error handling and retry logic
+- [x] Request chaining (create VPC → create subnet → create instance)
+- [x] Export to Python/Shell scripts using Bruno's codegen
 
 ### Integration Ideas
-- [ ] Python script to parse Bruno responses and build network diagrams
+- [x] Python script to parse Bruno responses and build network diagrams (examples/python_automation.py)
+- [x] Cost estimation by counting resources (examples/python_automation.py)
 - [ ] Automated testing of VPC configurations
-- [ ] Cost estimation by counting resources
 - [ ] Terraform state comparison (Bruno actual vs Terraform expected)
 
 ## Useful IBM Cloud VPC API Resources
@@ -415,6 +415,39 @@ When generating new `.bru` files or Python scripts:
 - **Production guidance**: HTTPS rule emphasizes encryption requirements, SSL certificate setup, SEO benefits
 - **SSH security**: Multiple examples showing restrictive CIDR blocks (office IP, bastion host, VPN) vs open access
 - **Total collection**: 26 endpoints (1 auth + 2 resource group + 13 VPC read + 4 VPC create + 1 SG create + 6 SG rules)
+
+### 2026-01-02 - Instance Provisioning & Advanced Features Implementation
+- **Created instance provisioning endpoints**: Complete VSI (virtual server instance) creation workflow
+- **Helper endpoints created**: list-instance-profiles.bru (compute configs), list-images.bru (OS images), list-ssh-keys.bru (SSH keys)
+- **Instance creation endpoint** (`create-instance.bru`): Full instance provisioning with VPC, subnet, security group, SSH key integration
+- **Comprehensive documentation**: Profiles, images, SSH keys all documented with recommendations and use cases
+- **Profile recommendations**: Development (cx2-2x4), production (cx2-4x8), database (mx2-4x32) with cost estimates
+- **Image recommendations**: Ubuntu 22.04 LTS (most popular), RHEL 9 (enterprise), Debian 12 (minimal), Windows Server 2022
+- **SSH key guidance**: Key generation, upload, usage, security best practices, troubleshooting
+- **Environment variables added**: NEW_INSTANCE_NAME, PROFILE_NAME, IMAGE_ID, PAGINATION_LIMIT, START_TOKEN
+- **Mise tasks added**: instances:list-profiles, instances:list-images, ssh-keys:list, instances:create
+- **Pagination support**: Created list-vpcs-paginated.bru demonstrating cursor-based pagination with comprehensive docs
+- **Pagination example script** (`examples/pagination_example.py`): Complete pagination automation with edge case handling
+- **Error handling script** (`examples/error_handling_retry.py`): BrunoClient class with exponential backoff, automatic token refresh, custom exceptions
+- **Workflow chaining script** (`examples/workflow_chaining.py`): VPCWorkflow class for automated multi-step infrastructure creation
+- **Python automation script** (`examples/python_automation.py`): Resource inventory, cost estimation, cleanup, topology mapping, batch operations
+- **Examples README**: Comprehensive documentation of all Python scripts with usage examples and integration patterns
+- **Advanced features completed**: All TODO items through "Advanced Features" section now complete
+- **Total files created**: 4 new .bru endpoints + 1 paginated endpoint + 4 Python example scripts + examples README
+- **Collection size**: 30+ endpoints covering complete VPC lifecycle (create, read, update, delete)
+- **Python integration**: 4 production-ready automation scripts (~1,500 lines of code) with error handling, retry logic, workflows
+
+### 2026-01-02 - Documentation Reorganization & Cleanup
+- **Streamlined main README**: Reduced from 500+ lines to 240 lines, more scannable and concise
+- **Removed excessive emojis**: Eliminated checkmarks and emoji symbols for professional appearance
+- **Created docs directory**: Organized supporting documentation separately from main README
+- **Created docs/MISE.md**: Complete mise task runner reference with all commands, parameters, workflows, troubleshooting
+- **Updated README structure**: Focused on quick start, moved detailed reference to separate docs
+- **Improved information architecture**: Main README for getting started, CLAUDE.md for development, docs/MISE.md for task reference
+- **Documentation consistency**: All READMEs now follow consistent style (minimal emojis, professional tone)
+- **Task list updates**: Marked network diagram and cost estimation as complete in CLAUDE.md TODO
+- **Better navigation**: Clear links between README, CLAUDE.md, docs/MISE.md, and examples/README.md
+- **Collection version bump**: Updated to v1.2 reflecting documentation improvements
 
 ## What Worked
 

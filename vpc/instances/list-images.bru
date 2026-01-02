@@ -1,0 +1,170 @@
+meta {
+  name: List Images
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/images?version={{api_version}}&generation=2&visibility=public&status=available
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+  visibility: public
+  status: available
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const images = res.body.images;
+    console.log(`Found ${images.length} available image(s):`);
+    console.log('');
+
+    console.log('=== UBUNTU IMAGES (LTS) ===');
+    const ubuntu = images.filter(img =>
+      img.name.toLowerCase().includes('ubuntu') &&
+      img.name.includes('amd64') &&
+      (img.name.includes('22-04') || img.name.includes('20-04'))
+    );
+    ubuntu.slice(0, 3).forEach(img => {
+      console.log(`  - ${img.name}`);
+      console.log(`    ID: ${img.id}`);
+      console.log(`    OS: ${img.operating_system?.display_name || 'N/A'}`);
+      console.log('');
+    });
+
+    console.log('=== RED HAT / CENTOS IMAGES ===');
+    const redhat = images.filter(img =>
+      (img.name.toLowerCase().includes('redhat') || img.name.toLowerCase().includes('centos')) &&
+      img.name.includes('amd64')
+    );
+    redhat.slice(0, 3).forEach(img => {
+      console.log(`  - ${img.name}`);
+      console.log(`    ID: ${img.id}`);
+      console.log(`    OS: ${img.operating_system?.display_name || 'N/A'}`);
+      console.log('');
+    });
+
+    console.log('=== DEBIAN IMAGES ===');
+    const debian = images.filter(img =>
+      img.name.toLowerCase().includes('debian') &&
+      img.name.includes('amd64')
+    );
+    debian.slice(0, 2).forEach(img => {
+      console.log(`  - ${img.name}`);
+      console.log(`    ID: ${img.id}`);
+      console.log(`    OS: ${img.operating_system?.display_name || 'N/A'}`);
+      console.log('');
+    });
+
+    console.log('=== WINDOWS SERVER IMAGES ===');
+    const windows = images.filter(img =>
+      img.name.toLowerCase().includes('windows') &&
+      img.name.includes('amd64')
+    );
+    windows.slice(0, 2).forEach(img => {
+      console.log(`  - ${img.name}`);
+      console.log(`    ID: ${img.id}`);
+      console.log(`    OS: ${img.operating_system?.display_name || 'N/A'}`);
+      console.log('');
+    });
+
+    console.log('💡 TIP: Copy the image ID for the OS you want to use');
+    console.log('💡 Set IMAGE_ID environment variable when creating instance');
+
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  }
+}
+
+docs {
+  # List Images
+
+  Returns all available operating system images for creating virtual server instances.
+  By default, filters to show only public images that are currently available.
+
+  ## Image Types:
+
+  **Linux Distributions:**
+  - Ubuntu 22.04 LTS (Jammy Jellyfish) - Most popular, long-term support
+  - Ubuntu 20.04 LTS (Focal Fossa) - Previous LTS, supported until 2025
+  - Red Hat Enterprise Linux (RHEL) 8.x/9.x - Enterprise Linux
+  - CentOS Stream 8/9 - Community RHEL alternative
+  - Debian 11 (Bullseye) / 12 (Bookworm) - Stable, minimal
+  - Fedora CoreOS - Container-optimized
+
+  **Windows Server:**
+  - Windows Server 2022 - Latest Windows Server
+  - Windows Server 2019 - Previous version, still supported
+  - Windows Server 2016 - Legacy support
+
+  ## Architecture:
+  - amd64 (x86_64) - Standard Intel/AMD processors
+  - s390x - IBM Z mainframe architecture (specialized)
+
+  ## Query Parameters:
+  - version: API version (required)
+  - generation: Always use "2" for VPC Gen2
+  - visibility: "public" (IBM-provided) or "private" (your custom images)
+  - status: "available" filters to ready-to-use images
+  - name: Filter by image name (partial match)
+  - resource_group.id: Filter by resource group (for private images)
+
+  ## Response Fields:
+  - id: Image ID (use this when creating instance)
+  - name: Human-readable image name
+  - operating_system: OS details (name, version, architecture, vendor)
+  - status: Image status (available, pending, deprecated, etc.)
+  - visibility: public or private
+  - encryption: Encryption type (none, user_managed)
+  - file: Source file details (size, checksums)
+  - created_at: When image was created
+
+  ## Recommendations:
+
+  **For Development:**
+  - Ubuntu 22.04 LTS - Great package availability, active community
+  - Debian 12 - Minimal, stable, lightweight
+
+  **For Production:**
+  - Red Hat Enterprise Linux 9 - Enterprise support, certified
+  - Ubuntu 22.04 LTS - 5 years of updates (until 2027)
+
+  **For Containers:**
+  - Fedora CoreOS - Optimized for containerized workloads
+  - Ubuntu 22.04 LTS - Excellent Docker/Kubernetes support
+
+  **For Windows Workloads:**
+  - Windows Server 2022 - Latest features, active support
+  - Windows Server 2019 - Proven stability
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+  - 400: Invalid query parameters
+
+  ## Filter Examples:
+
+  To filter images, add these to query params:
+  - name=ubuntu-22-04: Show only Ubuntu 22.04 images
+  - operating_system.architecture=amd64: Show only x86_64 images
+  - visibility=private: Show your custom images only
+
+  ## Next Steps:
+  After selecting an image:
+  1. Copy the image ID (e.g., "r006-abc123...")
+  2. Export: export IMAGE_ID="r006-abc123..."
+  3. List SSH keys: mise run ssh-keys:list
+  4. Create instance: mise run instances:create
+}

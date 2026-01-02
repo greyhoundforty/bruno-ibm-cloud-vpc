@@ -24,6 +24,10 @@ run = "bru run auth/get-iam-token.bru resource-groups/get-resource-group-by-name
 description = "List all VPCs"
 run = "bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod"
 
+[tasks."vpc:list-paginated"]
+description = "List VPCs with pagination (set PAGINATION_LIMIT, START_TOKEN)"
+run = "bru run auth/get-iam-token.bru vpc/list-vpcs-paginated.bru --env prod"
+
 [tasks."vpc:get"]
 description = "Get specific VPC by ID (set VPC_ID env var)"
 run = "bru run auth/get-iam-token.bru vpc/get-vpc.bru --env prod"
@@ -107,3 +111,20 @@ run = "bru run auth/get-iam-token.bru vpc/load-balancers/get-load-balancer.bru -
 [tasks."subnets:get"]
 description = "Get specific subnet by ID (set SUBNET_ID env var)"
 run = "bru run auth/get-iam-token.bru vpc/subnets/get-subnet.bru --env prod"
+
+[tasks."instances:list-profiles"]
+description = "List all instance profiles (compute configurations)"
+run = "bru run auth/get-iam-token.bru vpc/instances/list-instance-profiles.bru --env prod"
+
+[tasks."instances:list-images"]
+description = "List all available OS images"
+run = "bru run auth/get-iam-token.bru vpc/instances/list-images.bru --env prod"
+
+[tasks."ssh-keys:list"]
+description = "List all SSH keys"
+run = "bru run auth/get-iam-token.bru vpc/ssh-keys/list-ssh-keys.bru --env prod"
+
+[tasks."instances:create"]
+description = "Create instance (set NEW_INSTANCE_NAME, VPC_ID, ZONE_NAME, PROFILE_NAME, IMAGE_ID, SUBNET_ID, SECURITY_GROUP_ID, SSH_KEY_ID)"
+run = "bru run auth/get-iam-token.bru vpc/instances/create-instance.bru --env prod"
+

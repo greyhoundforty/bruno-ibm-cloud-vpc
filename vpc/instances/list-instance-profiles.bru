@@ -1,0 +1,114 @@
+meta {
+  name: List Instance Profiles
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/instance/profiles?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const profiles = res.body.profiles;
+    console.log(`Found ${profiles.length} instance profile(s):`);
+    console.log('');
+
+    console.log('=== RECOMMENDED PROFILES (Balanced) ===');
+    const balanced = profiles.filter(p => p.name.startsWith('bx2-') || p.name.startsWith('cx2-'));
+    balanced.slice(0, 5).forEach(profile => {
+      console.log(`  - ${profile.name}`);
+      console.log(`    vCPUs: ${profile.vcpu_count?.value || 'N/A'}`);
+      console.log(`    Memory: ${profile.memory?.value || 'N/A'} GB`);
+      console.log(`    Bandwidth: ${profile.bandwidth?.value || 'N/A'} Mbps`);
+      console.log(`    Family: ${profile.family || 'N/A'}`);
+      console.log('');
+    });
+
+    console.log('=== POPULAR PROFILES ===');
+    const popular = ['cx2-2x4', 'cx2-4x8', 'bx2-2x8', 'mx2-4x32'];
+    popular.forEach(name => {
+      const profile = profiles.find(p => p.name === name);
+      if (profile) {
+        console.log(`  - ${profile.name} (${profile.vcpu_count?.value || '?'} vCPU, ${profile.memory?.value || '?'} GB RAM)`);
+      }
+    });
+
+  } else if (res.status === 401) {
+    console.error("Token expired - run 'Get IAM Token' request again");
+  }
+}
+
+docs {
+  # List Instance Profiles
+
+  Returns all available instance profiles (compute configurations) for virtual server instances.
+  Instance profiles define the vCPU, memory, network bandwidth, and storage configuration.
+
+  ## Profile Families:
+  - **bx2**: Balanced (general purpose) - Good ratio of compute/memory/network
+  - **cx2**: Compute optimized - Higher vCPU to memory ratio
+  - **mx2**: Memory optimized - Higher memory to vCPU ratio
+  - **ux2**: Ultra high memory - Very high memory configurations
+  - **gx2**: GPU - Includes GPU for machine learning/graphics
+  - **vx2**: Very high memory - Enterprise workloads
+
+  ## Profile Naming Convention:
+  Format: {family}-{vcpu}x{memory}
+  - Example: cx2-2x4 = Compute family, 2 vCPU, 4 GB RAM
+  - Example: bx2-4x16 = Balanced family, 4 vCPU, 16 GB RAM
+
+  ## Recommended Profiles for Common Use Cases:
+
+  **Development/Testing:**
+  - cx2-2x4 (2 vCPU, 4 GB) - Small apps, testing
+  - bx2-2x8 (2 vCPU, 8 GB) - Medium apps
+
+  **Production Web Applications:**
+  - cx2-4x8 (4 vCPU, 8 GB) - Standard web apps
+  - bx2-4x16 (4 vCPU, 16 GB) - Heavy web traffic
+
+  **Database Servers:**
+  - mx2-4x32 (4 vCPU, 32 GB) - Small to medium databases
+  - mx2-8x64 (8 vCPU, 64 GB) - Large databases
+
+  **Compute-Intensive:**
+  - cx2-8x16 (8 vCPU, 16 GB) - Data processing, CI/CD
+  - cx2-16x32 (16 vCPU, 32 GB) - Heavy computation
+
+  ## Response Fields:
+  - name: Profile identifier (use this when creating instance)
+  - family: Profile family (bx2, cx2, mx2, etc.)
+  - vcpu_count: Number of virtual CPUs
+  - memory: Memory in GB
+  - bandwidth: Network bandwidth in Mbps
+  - port_speed: Network interface speed
+  - disks: Available disk configurations
+  - gpu_count: Number of GPUs (if applicable)
+  - numa_count: NUMA node count
+
+  ## Common Status Codes:
+  - 200: Success
+  - 401: Token expired (re-authenticate)
+
+  ## Next Steps:
+  After selecting a profile:
+  1. Use the profile name (e.g., "cx2-2x4") when creating instances
+  2. List available images: mise run instances:list-images
+  3. Create instance: NEW_INSTANCE_NAME="my-instance" PROFILE_NAME="cx2-2x4" mise run instances:create
+}
