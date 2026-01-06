@@ -355,11 +355,28 @@ When generating new `.bru` files or Python scripts:
 
 ---
 
-**Last Updated**: January 5, 2026
-**Collection Version**: 1.3 (Phase 1 of 2.0 expansion - Block Storage Volumes complete)
+**Last Updated**: January 6, 2026
+**Collection Version**: 1.3 (Tags support + Phase 1 Block Storage Volumes complete)
 **API Version**: 2024-12-10 (check IBM docs for latest)
 
 ## Session Log
+
+### 2026-01-06 - Tags Implementation for All Resources
+- **Tags support added to all 6 resource creation endpoints**: VPCs, Subnets, Security Groups, Instances, Volumes
+- **Critical discovery: Bruno CLI environment variable quirk**: Inline shell variables (VAR=value bru run) don't work - must use --env-var flags or export
+- **Volume creation troubleshooting**: Fixed "invalid_zone" error by switching from inline vars to --env-var flags
+- **Important API difference discovered**: Volumes use `user_tags` field while all other resources use `tags` field
+- **Environment files updated**: Added TAGS variable to both prod.bru and dev.bru
+- **All .bru files updated**: Added tags/user_tags fields to request bodies for 6 creation endpoints
+- **README.md comprehensive update**: Added dedicated "Resource Tagging" section with examples, Bruno quirks, cleanup guidance
+- **Tag format documented**: Comma-separated quoted strings: `"demo","owner:rtiffany","env:test"`
+- **--env-var flag requirement**: Documented that Bruno CLI requires --env-var flags for reliable variable passing
+- **Tagging examples added**: All 6 resource types have complete tag usage examples showing --env-var pattern
+- **Testing successful**: Volume created with tags verified via IBM Cloud CLI (r006-14ef518a-7944-4b58-995a-7c17ec67e3c7)
+- **Tag use cases documented**: Easy cleanup, cost tracking, accountability, automation, organization
+- **Collection version bumped**: 1.2 → 1.3 to reflect tags as major feature addition
+- **Recent Updates section added**: README now tracks version history with feature additions
+- **Bruno CLI behavior documented**: BRUNO_QUIRKS.md created (mentioned in conversation, not in repo), details added to README
 
 ### 2026-01-05 - Phase 1: Block Storage Volumes Implementation
 - **Implemented 10 volume endpoints**: Complete block storage lifecycle management
@@ -500,6 +517,9 @@ When generating new `.bru` files or Python scripts:
 ✅ **Optional fnox integration**: Works great when needed, but not required for basic usage
 ✅ **Bruno CLI**: Multi-file execution (auth + request) preserves bearer token across requests
 ✅ **Comprehensive output**: Post-response scripts provide much better UX than raw JSON
+✅ **--env-var flag for tags**: Using --env-var flags reliably passes variables to Bruno (unlike inline shell vars)
+✅ **Tags for resource tracking**: All 6 resource types support tags enabling easy cleanup and organization
+✅ **API field name differences**: Volumes use user_tags while other resources use tags - handled transparently in .bru files
 ✅ **Directory structure**: Organized by resource type makes navigation intuitive
 ✅ **Documentation in docs blocks**: Keeps .bru files self-documenting
 ✅ **Standard naming conventions**: `IBM_API_KEY`, `prod.bru`, `dev.bru` are more intuitive than custom names
@@ -517,6 +537,10 @@ When generating new `.bru` files or Python scripts:
 ⚠️ **Bruno variable case sensitivity**: Environment file variable names (e.g., `vpc_id`) must match exactly when referenced in templates (`{{vpc_id}}`), not the OS env var name (`VPC_ID`)
 ⚠️ **JavaScript environment variable access**: Environment variables NOT directly accessible in post-response scripts - cannot use `${NEW_SUBNET_NAME}` directly, must avoid or use `bru.getEnvVar()`
 ⚠️ **409 Conflict on retry**: Subnet names must be unique - failed attempts leave resources that need different names on retry
+⚠️ **Bruno inline environment variables**: Inline shell variables (VAR=value bru run) do NOT work - Bruno CLI doesn't read them via `{{process.env.VAR}}`. Must use --env-var flags or export first
+⚠️ **Volumes use different tag field**: IBM Cloud API uses `user_tags` for volumes but `tags` for all other resources (VPCs, subnets, security groups, instances)
+⚠️ **Variable expansion in --env-var**: Shell variables like $RANDOM don't expand inside --env-var quotes - must pre-expand in shell first
+⚠️ **Volume creation "invalid_zone" error**: Initially appeared to be account/zone issue but was actually caused by Bruno not reading inline environment variables
 
 ## Next Steps for Next Session
 
@@ -533,6 +557,9 @@ When generating new `.bru` files or Python scripts:
 - ✅ fnox made optional (not required)
 - ✅ Standardized naming (IBM_API_KEY, prod.bru, dev.bru)
 - ✅ Mise task automation for all read and create operations
+- ✅ Tags support for all 6 resource creation endpoints (VPCs, Subnets, Security Groups, Instances, Volumes)
+- ✅ Comprehensive tagging documentation in README with --env-var flag usage
+- ✅ Volume tags using user_tags field vs tags field for other resources
 
 ### 🎯 Next Session: Continue Resource Creation (POST Endpoints)
 

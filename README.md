@@ -9,6 +9,7 @@ A Git-friendly API collection for IBM Cloud VPC REST API using [Bruno](https://w
 - **Self-Documenting** - Each request includes comprehensive inline documentation
 - **Zero Dependencies** - Just Bruno CLI and your API key
 - **Optional Task Automation** - Mise integration available for convenience
+- **Resource Tagging** - All creation endpoints support tags for tracking and cleanup
 
 ## What's Included
 
@@ -79,6 +80,150 @@ Token expires in: 3600 seconds
 bru run auth/get-iam-token.bru vpc/list-vpcs.bru --env prod
 ```
 
+## Resource Tagging
+
+All 6 resource creation endpoints support tags for easy tracking, organization, and cleanup of demo/test resources.
+
+### Why Use Tags?
+
+- **Easy Cleanup** - Delete all demo resources with one command
+- **Cost Tracking** - Identify which resources belong to which project
+- **Accountability** - Know who created each resource
+- **Automation** - Script cleanup tasks based on tags
+- **Organization** - Filter resources in IBM Cloud console by tags
+
+### Tag Format
+
+Tags must be comma-separated quoted strings:
+
+```bash
+TAGS='"demo","owner:rtiffany","env:test"'
+```
+
+### Important: Use --env-var Flag
+
+Bruno CLI requires using the `--env-var` flag for tags. Standard shell environment variables don't work:
+
+```bash
+# ❌ WRONG - Bruno won't see the TAGS variable
+TAGS='"demo","test"' bru run vpc/create-vpc.bru --env prod
+
+# ✅ CORRECT - Use --env-var flag
+bru run vpc/create-vpc.bru --env prod \
+  --env-var 'NEW_VPC_NAME=demo-vpc' \
+  --env-var 'RESOURCE_GROUP_ID=abc123' \
+  --env-var 'TAGS="demo","owner:rtiffany"'
+
+# ✅ ALSO CORRECT - Export first, then run
+export TAGS='"demo","owner:rtiffany"'
+bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod
+```
+
+### Critical: Volumes Use Different Field Name
+
+**Most resources** (VPCs, Subnets, Security Groups, Instances) use `tags` field:
+```json
+{
+  "name": "my-vpc",
+  "tags": ["demo", "test"]
+}
+```
+
+**Volumes use `user_tags` field** (different from other resources):
+```json
+{
+  "name": "my-volume",
+  "user_tags": ["demo", "test"]
+}
+```
+
+This difference is handled automatically in the `.bru` files - you just pass `TAGS` variable for all resource types.
+
+### Tagging Examples
+
+#### Create VPC with Tags
+```bash
+bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod \
+  --env-var 'NEW_VPC_NAME=demo-vpc' \
+  --env-var 'RESOURCE_GROUP_ID=ac83304b2fb6492e95995812da85b653' \
+  --env-var 'TAGS="demo","vpc-test","owner:rtiffany"'
+```
+
+#### Create Subnet with Tags
+```bash
+bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod \
+  --env-var 'NEW_SUBNET_NAME=demo-subnet' \
+  --env-var 'VPC_ID=r006-abc123' \
+  --env-var 'ZONE_NAME=us-south-1' \
+  --env-var 'SUBNET_IP_COUNT=256' \
+  --env-var 'TAGS="demo","subnet-test"'
+```
+
+#### Create Security Group with Tags
+```bash
+bru run auth/get-iam-token.bru vpc/security-groups/create-security-group.bru --env prod \
+  --env-var 'NEW_SG_NAME=demo-sg' \
+  --env-var 'VPC_ID=r006-abc123' \
+  --env-var 'TAGS="demo","allows-ssh"'
+```
+
+#### Create Instance with Tags
+```bash
+bru run auth/get-iam-token.bru vpc/instances/create-instance.bru --env prod \
+  --env-var 'NEW_INSTANCE_NAME=demo-instance' \
+  --env-var 'VPC_ID=r006-abc123' \
+  --env-var 'ZONE_NAME=us-south-1' \
+  --env-var 'PROFILE_NAME=cx2-2x4' \
+  --env-var 'IMAGE_ID=r006-xyz' \
+  --env-var 'SUBNET_ID=r006-def' \
+  --env-var 'SECURITY_GROUP_ID=r006-ghi' \
+  --env-var 'SSH_KEY_ID=r006-jkl' \
+  --env-var 'RESOURCE_GROUP_ID=ac83304b2fb6492e95995812da85b653' \
+  --env-var 'TAGS="demo","ubuntu-instance"'
+```
+
+#### Create Volume with Tags (Note: uses user_tags internally)
+```bash
+bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod \
+  --env-var 'VOLUME_NAME=demo-volume' \
+  --env-var 'ZONE_NAME=us-south-1' \
+  --env-var 'VOLUME_CAPACITY=100' \
+  --env-var 'VOLUME_PROFILE=general-purpose' \
+  --env-var 'RESOURCE_GROUP_ID=ac83304b2fb6492e95995812da85b653' \
+  --env-var 'TAGS="demo","100gb-storage"'
+```
+
+### Recommended Tag Patterns
+
+```bash
+# Always include "demo" for test resources
+TAGS='"demo"'
+
+# Add owner for accountability
+TAGS='"demo","owner:rtiffany"'
+
+# Include project context
+TAGS='"demo","owner:rtiffany","project:vpc-testing"'
+
+# Full metadata
+TAGS='"demo","owner:rtiffany","project:vpc-testing","env:dev","created:2026-01-06"'
+```
+
+### Tag Cleanup
+
+Use IBM Cloud CLI to find and delete tagged resources:
+
+```bash
+# List all resources with a specific tag
+ibmcloud resource search 'tags:demo'
+
+# Delete all demo volumes (example)
+ibmcloud is volumes --output json | jq -r '.[] | select(.user_tags | contains(["demo"])) | .id' | \
+  xargs -I {} ibmcloud is volume-delete {} --force
+```
+
+See helper scripts in `examples/` directory for automated cleanup.
+
 ## Bruno Command Usage
 
 ### Authentication Pattern
@@ -136,20 +281,38 @@ INSTANCE_ID=r006-mno345 bru run auth/get-iam-token.bru vpc/instances/get-instanc
 
 ### Create Resources
 
+**Note:** For resources that support tags, use the `--env-var` flag pattern shown in the [Resource Tagging](#resource-tagging) section above. The examples below use standard environment variables (which work without tags).
+
 #### Create VPC
 ```bash
+# Without tags (using environment variables)
 NEW_VPC_NAME="production-vpc" RESOURCE_GROUP_ID="abc123" \
   bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod
+
+# With tags (using --env-var flags - RECOMMENDED)
+bru run auth/get-iam-token.bru vpc/create-vpc.bru --env prod \
+  --env-var 'NEW_VPC_NAME=production-vpc' \
+  --env-var 'RESOURCE_GROUP_ID=abc123' \
+  --env-var 'TAGS="demo","production"'
 ```
 
 #### Create Subnet
 ```bash
 # Method 1: IP count (recommended - auto-assigns CIDR)
+# Without tags
 NEW_SUBNET_NAME="web-subnet" \
   VPC_ID="r006-abc" \
   ZONE_NAME="us-south-1" \
   SUBNET_IP_COUNT=256 \
   bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod
+
+# With tags (using --env-var flags)
+bru run auth/get-iam-token.bru vpc/subnets/create-subnet.bru --env prod \
+  --env-var 'NEW_SUBNET_NAME=web-subnet' \
+  --env-var 'VPC_ID=r006-abc' \
+  --env-var 'ZONE_NAME=us-south-1' \
+  --env-var 'SUBNET_IP_COUNT=256' \
+  --env-var 'TAGS="demo","web-tier"'
 
 # Method 2: Specific CIDR block
 NEW_SUBNET_NAME="app-subnet" \
@@ -161,8 +324,15 @@ NEW_SUBNET_NAME="app-subnet" \
 
 #### Create Security Group
 ```bash
+# Without tags
 NEW_SG_NAME="web-servers" VPC_ID="r006-abc" \
   bru run auth/get-iam-token.bru vpc/security-groups/create-security-group.bru --env prod
+
+# With tags (using --env-var flags)
+bru run auth/get-iam-token.bru vpc/security-groups/create-security-group.bru --env prod \
+  --env-var 'NEW_SG_NAME=web-servers' \
+  --env-var 'VPC_ID=r006-abc' \
+  --env-var 'TAGS="demo","web-sg"'
 ```
 
 #### Add Security Group Rules
@@ -195,7 +365,7 @@ bru run auth/get-iam-token.bru vpc/instances/list-instance-profiles.bru --env pr
 bru run auth/get-iam-token.bru vpc/instances/list-images.bru --env prod
 bru run auth/get-iam-token.bru vpc/ssh-keys/list-ssh-keys.bru --env prod
 
-# Then create instance
+# Then create instance without tags
 NEW_INSTANCE_NAME="web-server-01" \
   VPC_ID="r006-abc" \
   ZONE_NAME="us-south-1" \
@@ -205,6 +375,19 @@ NEW_INSTANCE_NAME="web-server-01" \
   SECURITY_GROUP_ID="r006-sg" \
   SSH_KEY_ID="r006-key" \
   bru run auth/get-iam-token.bru vpc/instances/create-instance.bru --env prod
+
+# With tags (using --env-var flags)
+bru run auth/get-iam-token.bru vpc/instances/create-instance.bru --env prod \
+  --env-var 'NEW_INSTANCE_NAME=web-server-01' \
+  --env-var 'VPC_ID=r006-abc' \
+  --env-var 'ZONE_NAME=us-south-1' \
+  --env-var 'PROFILE_NAME=cx2-2x4' \
+  --env-var 'IMAGE_ID=r006-img-ubuntu' \
+  --env-var 'SUBNET_ID=r006-subnet' \
+  --env-var 'SECURITY_GROUP_ID=r006-sg' \
+  --env-var 'SSH_KEY_ID=r006-key' \
+  --env-var 'RESOURCE_GROUP_ID=abc123' \
+  --env-var 'TAGS="demo","web-server","ubuntu"'
 ```
 
 #### Block Storage Volumes
@@ -226,19 +409,33 @@ VOLUME_ID="r006-vol123" bru run auth/get-iam-token.bru vpc/volumes/get-volume.br
 
 ##### Create Volume
 ```bash
-# Create 100GB general-purpose volume
-VOLUME_NAME="data-volume" \
-  ZONE_NAME="us-south-1" \
-  VOLUME_CAPACITY=100 \
-  VOLUME_PROFILE="general-purpose" \
-  bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod
+# IMPORTANT: Volume creation requires --env-var flags
+# Inline environment variables (VOLUME_NAME="test" bru run ...) do NOT work with Bruno CLI
+
+# Create 100GB general-purpose volume WITHOUT tags
+bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod \
+  --env-var 'VOLUME_NAME=data-volume' \
+  --env-var 'ZONE_NAME=us-south-1' \
+  --env-var 'VOLUME_CAPACITY=100' \
+  --env-var 'VOLUME_PROFILE=general-purpose' \
+  --env-var 'RESOURCE_GROUP_ID=abc123'
+
+# Create volume WITH tags (Note: uses user_tags internally, but you just pass TAGS)
+bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod \
+  --env-var 'VOLUME_NAME=demo-volume' \
+  --env-var 'ZONE_NAME=us-south-1' \
+  --env-var 'VOLUME_CAPACITY=100' \
+  --env-var 'VOLUME_PROFILE=general-purpose' \
+  --env-var 'RESOURCE_GROUP_ID=abc123' \
+  --env-var 'TAGS="demo","100gb-storage","owner:rtiffany"'
 
 # Create high-performance volume
-VOLUME_NAME="db-volume" \
-  ZONE_NAME="us-south-1" \
-  VOLUME_CAPACITY=500 \
-  VOLUME_PROFILE="10iops-tier" \
-  bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod
+bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod \
+  --env-var 'VOLUME_NAME=db-volume' \
+  --env-var 'ZONE_NAME=us-south-1' \
+  --env-var 'VOLUME_CAPACITY=500' \
+  --env-var 'VOLUME_PROFILE=10iops-tier' \
+  --env-var 'RESOURCE_GROUP_ID=abc123'
 ```
 
 **Volume Profiles:**
@@ -303,7 +500,9 @@ START_TOKEN="abc123..." PAGINATION_LIMIT=10 \
 
 ## Complete Workflow Example
 
-Create a complete VPC environment with subnets, security groups, and rules:
+Create a complete VPC environment with subnets, security groups, and rules.
+
+**Note:** Add `--env-var 'TAGS="demo","project-name"'` to any resource creation command below to enable easy cleanup later.
 
 ```bash
 # 1. Get resource group ID
@@ -499,6 +698,19 @@ MIT License
 
 ---
 
-**Collection Version**: 1.2
+**Collection Version**: 1.3
 **IBM Cloud VPC API Version**: 2024-12-10
-**Last Updated**: January 2, 2026
+**Last Updated**: January 6, 2026
+
+## Recent Updates
+
+**v1.3 (January 6, 2026)**
+- Added tags support for all 6 resource creation endpoints (VPCs, Subnets, Security Groups, Instances, Volumes)
+- Documented --env-var flag requirement for Bruno CLI
+- Volumes use `user_tags` field while other resources use `tags`
+- Added comprehensive tagging examples and cleanup guidance
+
+**v1.2 (January 2, 2026)**
+- Block Storage Volumes phase complete (10 new endpoints)
+- Python automation examples
+- Documentation reorganization
