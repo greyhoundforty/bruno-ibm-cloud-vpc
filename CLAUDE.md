@@ -236,6 +236,31 @@ These scripts run automatically after requests complete.
 - [ ] Automated testing of VPC configurations
 - [ ] Terraform state comparison (Bruno actual vs Terraform expected)
 
+### VPC Resource Expansion (Version 2.0 Target)
+- [x] **Phase 1: Block Storage Volumes** (✅ COMPLETE)
+  - [x] List volume profiles (IOPS tiers)
+  - [x] List/get volumes
+  - [x] Create/update/delete volumes
+  - [x] Volume attachments (list, get, attach, detach)
+  - [x] 10 endpoints, 10 mise tasks
+  - [x] Complete documentation in README, MISE.md
+- [ ] **Phase 2: Flow Log Collectors** (PLANNED)
+  - [ ] List/get/create/update/delete flow log collectors
+  - [ ] Support for VPC, subnet, instance, interface targets
+  - [ ] Cloud Object Storage integration
+  - [ ] ~5 endpoints
+- [ ] **Phase 3: Site-to-Site VPN** (PLANNED)
+  - [ ] IKE policies (list, get, create, update, delete)
+  - [ ] IPsec policies (list, get, create, update, delete)
+  - [ ] VPN gateways (list, get, create, update, delete)
+  - [ ] VPN connections (list, get, create, update, delete)
+  - [ ] ~20 endpoints
+- [ ] **Phase 4: Client-to-Site VPN** (PLANNED)
+  - [ ] VPN servers (list, get, create, update, delete)
+  - [ ] VPN server routes (list, get, create, delete)
+  - [ ] VPN server clients (list, get, disconnect)
+  - [ ] ~12 endpoints
+
 ## Useful IBM Cloud VPC API Resources
 
 - **API Reference**: https://cloud.ibm.com/apidocs/vpc
@@ -330,11 +355,29 @@ When generating new `.bru` files or Python scripts:
 
 ---
 
-**Last Updated**: December 30, 2024
-**Collection Version**: 1.0
+**Last Updated**: January 5, 2026
+**Collection Version**: 1.3 (Phase 1 of 2.0 expansion - Block Storage Volumes complete)
 **API Version**: 2024-12-10 (check IBM docs for latest)
 
 ## Session Log
+
+### 2026-01-05 - Phase 1: Block Storage Volumes Implementation
+- **Implemented 10 volume endpoints**: Complete block storage lifecycle management
+- **List endpoints**: list-volume-profiles.bru (IOPS tiers), list-volumes.bru
+- **Get endpoint**: get-volume.bru with detailed capacity, IOPS, attachment info
+- **Create endpoint**: create-volume.bru with 4 profile types (general-purpose, 5iops-tier, 10iops-tier, custom)
+- **Update endpoint**: update-volume.bru for capacity increases (10-16,000 GB) and renaming
+- **Delete endpoint**: delete-volume.bru with safety checks and detachment requirements
+- **Attachment endpoints**: 4 endpoints (list, get, create, delete) for volume-instance operations
+- **Comprehensive documentation**: Each endpoint has detailed docs, prerequisites, examples, error handling, OS mount instructions
+- **Environment variables**: Added 8 new volume variables to prod.bru and dev.bru
+- **Mise integration**: Added 10 new volume tasks (volumes:list, volumes:create, volumes:attach, etc.)
+- **README.md updated**: Added complete Block Storage Volumes section with bru command examples
+- **docs/MISE.md updated**: Added volume tasks with bru equivalents following established pattern
+- **Volume profiles**: Documented all 4 IOPS tiers with capacity ranges, use cases, cost guidance
+- **Post-response scripts**: Comprehensive formatted output for all endpoints with next steps and troubleshooting
+- **Total collection size**: 40+ endpoints (30+ existing + 10 volumes)
+- **Collection version target**: 2.0 (Phase 1 of 4-phase expansion plan)
 
 ### 2024-12-30 - Initial Setup & Syntax Fixes
 - **Fixed Bruno syntax errors**: Removed all comments from `params:query`, `params:path`, `vars`, and other blocks

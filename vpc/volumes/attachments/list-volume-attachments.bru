@@ -1,0 +1,168 @@
+meta {
+  name: List Volume Attachments
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/instances/{{instance_id}}/volume_attachments?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+docs {
+  # List Volume Attachments for Instance
+
+  ## Description
+  List all volume attachments for a specific virtual server instance. This shows both boot volumes and data volumes attached to the instance.
+
+  ## Required Environment Variables
+  - `INSTANCE_ID` - The ID of the instance to list attachments for
+
+  ## Example Usage
+
+  ### Using bru
+  ```bash
+  INSTANCE_ID="r006-abc123..." bru run auth/get-iam-token.bru vpc/volumes/attachments/list-volume-attachments.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  INSTANCE_ID="r006-abc123..." mise run volumes:list-attachments
+  ```
+
+  ## Response
+  - **200**: Success - Returns array of volume attachments
+  - **404**: Not Found - Instance ID does not exist
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## Response Fields
+  - `id` - Attachment ID (required for detach operations)
+  - `name` - Attachment name
+  - `volume` - Volume details (ID, name, capacity, IOPS)
+  - `device` - Device details (ID corresponds to /dev/vd* in Linux)
+  - `type` - Attachment type ("boot" or "data")
+  - `status` - Attachment status (attached, attaching, detaching)
+  - `delete_volume_on_instance_delete` - Whether volume is deleted with instance
+
+  ## Attachment Types
+  - **boot** - Boot volume containing OS (always present, typically 100 GB)
+  - **data** - Additional storage volumes (0 to many)
+
+  ## Device IDs
+  Linux device mapping:
+  - `/dev/vda` - Boot volume (always)
+  - `/dev/vdb`, `/dev/vdc`, etc. - Data volumes (in order attached)
+
+  Windows device mapping:
+  - Visible in Disk Management as additional disks
+
+  ## Next Steps
+  After viewing attachments:
+  1. Note attachment IDs for detach operations
+  2. Use device IDs to mount volumes in the OS
+  3. Check `delete_volume_on_instance_delete` flag
+
+  ## Related Endpoints
+  - `get-volume-attachment.bru` - Get specific attachment details
+  - `create-volume-attachment.bru` - Attach volume to instance
+  - `delete-volume-attachment.bru` - Detach volume from instance
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const attachments = res.body.volume_attachments;
+    console.log(`Found ${attachments.length} volume attachment(s):\n`);
+
+    if (attachments.length === 0) {
+      console.log('No volume attachments found.');
+      console.log('This is unusual - instances should have at least a boot volume.');
+    } else {
+      // Separate boot and data volumes
+      const bootAttachments = attachments.filter(a => a.type === 'boot');
+      const dataAttachments = attachments.filter(a => a.type === 'data');
+
+      // Show boot volumes first
+      if (bootAttachments.length > 0) {
+        console.log('=== BOOT VOLUMES ===');
+        bootAttachments.forEach((attachment, index) => {
+          console.log(`\nBoot Volume ${index + 1}:`);
+          console.log(`  Name: ${attachment.name}`);
+          console.log(`  Attachment ID: ${attachment.id}`);
+          console.log(`  Device: ${attachment.device?.id || 'N/A'} (/dev/vda in Linux)`);
+          console.log(`  Status: ${attachment.status}`);
+          if (attachment.volume) {
+            console.log(`  Volume Name: ${attachment.volume.name || 'N/A'}`);
+            console.log(`  Volume ID: ${attachment.volume.id || 'N/A'}`);
+            console.log(`  Capacity: ${attachment.volume.capacity || 'N/A'} GB`);
+            console.log(`  IOPS: ${attachment.volume.iops || 'N/A'}`);
+          }
+          console.log(`  Delete on Instance Delete: ${attachment.delete_volume_on_instance_delete || false}`);
+        });
+        console.log('');
+      }
+
+      // Show data volumes
+      if (dataAttachments.length > 0) {
+        console.log('=== DATA VOLUMES ===');
+        dataAttachments.forEach((attachment, index) => {
+          console.log(`\nData Volume ${index + 1}:`);
+          console.log(`  Name: ${attachment.name}`);
+          console.log(`  Attachment ID: ${attachment.id}`);
+          console.log(`  Device: ${attachment.device?.id || 'N/A'} (/dev/vd${String.fromCharCode(98 + index)} in Linux)`);
+          console.log(`  Status: ${attachment.status}`);
+          if (attachment.volume) {
+            console.log(`  Volume Name: ${attachment.volume.name || 'N/A'}`);
+            console.log(`  Volume ID: ${attachment.volume.id || 'N/A'}`);
+            console.log(`  Capacity: ${attachment.volume.capacity || 'N/A'} GB`);
+            console.log(`  IOPS: ${attachment.volume.iops || 'N/A'}`);
+          }
+          console.log(`  Delete on Instance Delete: ${attachment.delete_volume_on_instance_delete || false}`);
+        });
+        console.log('');
+      } else {
+        console.log('=== DATA VOLUMES ===');
+        console.log('No data volumes attached.');
+        console.log('');
+        console.log('To attach a data volume:');
+        console.log('  INSTANCE_ID="<instance-id>" VOLUME_ID="<volume-id>" \\');
+        console.log('    bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod');
+        console.log('');
+      }
+
+      // Summary
+      console.log('=== SUMMARY ===');
+      console.log(`Boot Volumes: ${bootAttachments.length}`);
+      console.log(`Data Volumes: ${dataAttachments.length}`);
+      console.log(`Total Attachments: ${attachments.length}`);
+
+      const totalCapacity = attachments.reduce((sum, a) => sum + (a.volume?.capacity || 0), 0);
+      console.log(`Total Capacity: ${totalCapacity} GB`);
+    }
+
+  } else if (res.status === 404) {
+    console.error('✗ Instance not found\n');
+    console.error('Possible causes:');
+    console.error('  - Instance ID is incorrect');
+    console.error('  - Instance has been deleted');
+    console.error('  - Instance is in a different region');
+    console.error('');
+    console.error('To list all instances:');
+    console.error('  bru run auth/get-iam-token.bru vpc/instances/list-instances.bru --env prod');
+
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}

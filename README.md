@@ -19,6 +19,7 @@ A Git-friendly API collection for IBM Cloud VPC REST API using [Bruno](https://w
 - **Subnets** - List, get details, create (IP count or CIDR methods)
 - **Security Groups** - List, get details, create, add rules (SSH, HTTP, HTTPS)
 - **Instances** - List, get details, create (with profiles and images)
+- **Block Storage Volumes** - List, get, create, update, delete, attach, detach
 - **Floating IPs** - List and get details
 - **Load Balancers** - List and get details
 
@@ -28,7 +29,7 @@ A Git-friendly API collection for IBM Cloud VPC REST API using [Bruno](https://w
 - **Workflow Automation** - Chain requests to create complete infrastructures
 - **Batch Operations** - Create multiple resources programmatically
 
-**Total Endpoints**: 30+ (covering complete VPC lifecycle)
+**Total Endpoints**: 40+ (covering complete VPC lifecycle including block storage)
 
 ## Prerequisites
 
@@ -204,6 +205,86 @@ NEW_INSTANCE_NAME="web-server-01" \
   SECURITY_GROUP_ID="r006-sg" \
   SSH_KEY_ID="r006-key" \
   bru run auth/get-iam-token.bru vpc/instances/create-instance.bru --env prod
+```
+
+#### Block Storage Volumes
+
+##### List Volume Profiles (IOPS Tiers)
+```bash
+# View available performance tiers
+bru run auth/get-iam-token.bru vpc/volumes/list-volume-profiles.bru --env prod
+```
+
+##### List Volumes
+```bash
+# List all volumes
+bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod
+
+# Get specific volume
+VOLUME_ID="r006-vol123" bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod
+```
+
+##### Create Volume
+```bash
+# Create 100GB general-purpose volume
+VOLUME_NAME="data-volume" \
+  ZONE_NAME="us-south-1" \
+  VOLUME_CAPACITY=100 \
+  VOLUME_PROFILE="general-purpose" \
+  bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod
+
+# Create high-performance volume
+VOLUME_NAME="db-volume" \
+  ZONE_NAME="us-south-1" \
+  VOLUME_CAPACITY=500 \
+  VOLUME_PROFILE="10iops-tier" \
+  bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod
+```
+
+**Volume Profiles:**
+- `general-purpose` - 3 IOPS/GB (10-16,000 GB) - Most cost-effective
+- `5iops-tier` - 5 IOPS/GB (10-9,600 GB) - Production workloads
+- `10iops-tier` - 10 IOPS/GB (10-4,800 GB) - High performance
+- `custom` - User-defined IOPS (10-16,000 GB) - Precise tuning
+
+##### Update Volume
+```bash
+# Increase capacity (cannot decrease)
+VOLUME_ID="r006-vol123" VOLUME_CAPACITY=200 \
+  bru run auth/get-iam-token.bru vpc/volumes/update-volume.bru --env prod
+
+# Rename volume
+VOLUME_ID="r006-vol123" NEW_VOLUME_NAME="production-data" \
+  bru run auth/get-iam-token.bru vpc/volumes/update-volume.bru --env prod
+```
+
+##### Attach Volume to Instance
+```bash
+# List attachments for an instance
+INSTANCE_ID="r006-inst123" \
+  bru run auth/get-iam-token.bru vpc/volumes/attachments/list-volume-attachments.bru --env prod
+
+# Attach volume to instance
+INSTANCE_ID="r006-inst123" VOLUME_ID="r006-vol123" \
+  bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod
+
+# After attaching, mount in OS:
+# Linux: sudo mkfs.ext4 /dev/vdb && sudo mount /dev/vdb /mnt/data
+# Windows: Disk Management → Online → Initialize → Format
+```
+
+##### Detach Volume
+```bash
+# Detach volume (unmount in OS first!)
+INSTANCE_ID="r006-inst123" VOLUME_ATTACHMENT_ID="r006-attach123" \
+  bru run auth/get-iam-token.bru vpc/volumes/attachments/delete-volume-attachment.bru --env prod
+```
+
+##### Delete Volume
+```bash
+# Delete volume (must be detached first)
+VOLUME_ID="r006-vol123" \
+  bru run auth/get-iam-token.bru vpc/volumes/delete-volume.bru --env prod
 ```
 
 ### Pagination for Large Result Sets
@@ -384,6 +465,8 @@ bruno-ibm-cloud-vpc/
 │   ├── subnets/            # Subnet operations
 │   ├── security-groups/    # Security group operations
 │   ├── instances/          # Instance operations
+│   ├── volumes/            # Block storage volume operations
+│   │   └── attachments/    # Volume attachment operations
 │   ├── ssh-keys/           # SSH key operations
 │   ├── floating-ips/       # Floating IP operations
 │   └── load-balancers/     # Load balancer operations

@@ -30,7 +30,8 @@ body:json {
     "resource_group": {
       "id": "{{RESOURCE_GROUP_ID}}"
     },
-    "address_prefix_management": "auto"
+    "address_prefix_management": "auto",
+    "tags": [{{TAGS}}]
   }
 }
 
@@ -108,7 +109,10 @@ docs {
 
   ## Environment Variables Required:
   - NEW_VPC_NAME: Name for the new VPC (e.g., "my-vpc")
-  - RESOURCE_GROUP_ID: Resource group ID (optional)
+
+  ## Optional Environment Variables:
+  - RESOURCE_GROUP_ID: Resource group ID (uses default if not specified)
+  - TAGS: Comma-separated quoted tags (e.g., `"demo","owner:ryan"`)
 
   ## Request Body Fields:
 

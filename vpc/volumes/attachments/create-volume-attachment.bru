@@ -1,0 +1,294 @@
+meta {
+  name: Create Volume Attachment
+  type: http
+  seq: 3
+}
+
+post {
+  url: {{vpc_endpoint}}/v1/instances/{{instance_id}}/volume_attachments?version={{api_version}}&generation=2
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+body:json {
+  {
+    "volume": {
+      "id": "{{volume_id}}"
+    },
+    "delete_volume_on_instance_delete": false
+  }
+}
+
+docs {
+  # Attach Volume to Instance
+
+  ## Description
+  Attach an existing block storage volume to a virtual server instance. The volume must be in "available" status (not currently attached to another instance).
+
+  ## Required Environment Variables
+  - `INSTANCE_ID` - The ID of the instance to attach to
+  - `VOLUME_ID` - The ID of the volume to attach
+
+  ## Optional Environment Variables
+  - `DELETE_VOLUME_ON_INSTANCE_DELETE` - "true" or "false" (default: false)
+
+  ## Prerequisites
+  1. Volume must exist and be in "available" status
+  2. Volume and instance must be in the same zone
+  3. Instance must be running or stopped (not creating/deleting)
+  4. Volume cannot be attached to multiple instances simultaneously
+
+  ## Delete on Instance Delete Behavior
+
+  ### false (default) - Preserve Volume
+  - Volume is detached when instance is deleted
+  - Volume remains in "available" status
+  - Data is preserved
+  - Volume charges continue
+  - **Recommended for production data**
+
+  ### true - Delete Volume
+  - Volume is permanently deleted with instance
+  - All data is lost
+  - Volume charges stop
+  - Cannot be undone
+  - **Recommended for temporary/scratch volumes**
+
+  ## Example Usage
+
+  ### Using bru - Attach with Preservation
+  ```bash
+  INSTANCE_ID="r006-abc123..." VOLUME_ID="r006-def456..." \
+    bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod
+  ```
+
+  ### Using bru - Attach with Auto-Delete
+  ```bash
+  INSTANCE_ID="r006-abc123..." VOLUME_ID="r006-def456..." DELETE_VOLUME_ON_INSTANCE_DELETE="true" \
+    bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  INSTANCE_ID="r006-abc123..." VOLUME_ID="r006-def456..." mise run volumes:attach
+  ```
+
+  ## Response
+  - **201**: Created - Volume attachment created successfully
+  - **400**: Bad Request - Invalid parameters or volume not available
+  - **404**: Not Found - Instance or volume ID does not exist
+  - **409**: Conflict - Volume already attached or zone mismatch
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## Attachment Time
+  - Typical: 10-30 seconds
+  - Status: attaching → attached
+  - Check with `get-volume-attachment.bru`
+
+  ## After Attachment (OS Configuration)
+
+  ### Linux - First Time Setup
+  ```bash
+  # 1. Check device appeared
+  lsblk
+  # Should see /dev/vdb, /dev/vdc, etc.
+
+  # 2. Create filesystem (FIRST TIME ONLY!)
+  sudo mkfs.ext4 /dev/vdb
+  # OR for XFS:
+  sudo mkfs.xfs /dev/vdb
+
+  # 3. Create mount point
+  sudo mkdir -p /mnt/data
+
+  # 4. Mount volume
+  sudo mount /dev/vdb /mnt/data
+
+  # 5. Verify
+  df -h /mnt/data
+
+  # 6. Add to /etc/fstab for persistence
+  # Get UUID
+  sudo blkid /dev/vdb
+
+  # Add to /etc/fstab (use UUID, not device name)
+  # UUID=xxx /mnt/data ext4 defaults,nofail 0 2
+  ```
+
+  ### Linux - Re-attaching Existing Volume
+  ```bash
+  # Volume already has filesystem, just mount
+  sudo mkdir -p /mnt/data
+  sudo mount /dev/vdb /mnt/data
+  df -h /mnt/data
+  ```
+
+  ### Windows
+  ```powershell
+  # 1. Open Disk Management (diskmgmt.msc)
+  # 2. New disk will appear as "Offline"
+  # 3. Right-click → Online
+  # 4. Initialize disk (if first time)
+  # 5. Create new volume
+  # 6. Format with NTFS
+  # 7. Assign drive letter
+  ```
+
+  ## Common Issues
+
+  ### Volume Not Available
+  - Check volume status with `get-volume.bru`
+  - Detach from other instances if attached
+  - Wait if status is "pending"
+
+  ### Zone Mismatch
+  - Volume and instance must be in same zone
+  - List volumes to check zones: `list-volumes.bru`
+  - List instances to check zones: `list-instances.bru`
+
+  ### Device Not Appearing in OS
+  - Wait 30 seconds and check `lsblk` again
+  - Reboot instance if needed
+  - Check system logs: `dmesg | tail`
+
+  ## Next Steps
+  After attachment:
+  1. Wait for status to become "attached" (10-30 seconds)
+  2. Verify attachment with `get-volume-attachment.bru`
+  3. Configure in OS (format, mount, add to fstab)
+  4. Begin using storage
+
+  ## Related Endpoints
+  - `list-volume-attachments.bru` - View all attachments
+  - `get-volume-attachment.bru` - Check attachment status
+  - `delete-volume-attachment.bru` - Detach volume
+  - `get-volume.bru` - Check volume status before attaching
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const attachment = res.body;
+
+    console.log('✓ Volume attachment created successfully!\n');
+
+    console.log('=== ATTACHMENT INFO ===');
+    console.log(`Name: ${attachment.name}`);
+    console.log(`Attachment ID: ${attachment.id}`);
+    console.log(`Type: ${attachment.type}`);
+    console.log(`Status: ${attachment.status}`);
+    console.log('');
+
+    console.log('=== DEVICE INFO ===');
+    console.log(`Device ID: ${attachment.device?.id || 'N/A'}`);
+    console.log('Linux: Will appear as /dev/vdb, /dev/vdc, etc. (check with lsblk)');
+    console.log('Windows: Will appear in Disk Management');
+    console.log('');
+
+    console.log('=== VOLUME INFO ===');
+    if (attachment.volume) {
+      console.log(`Name: ${attachment.volume.name || 'N/A'}`);
+      console.log(`Volume ID: ${attachment.volume.id || 'N/A'}`);
+      console.log(`Capacity: ${attachment.volume.capacity || 'N/A'} GB`);
+      console.log(`IOPS: ${attachment.volume.iops || 'N/A'}`);
+    }
+    console.log('');
+
+    console.log('=== DELETION BEHAVIOR ===');
+    console.log(`Delete volume on instance delete: ${attachment.delete_volume_on_instance_delete || false}`);
+    if (attachment.delete_volume_on_instance_delete) {
+      console.log('⚠️  Volume will be DELETED if instance is deleted');
+    } else {
+      console.log('✓ Volume will be preserved if instance is deleted');
+    }
+    console.log('');
+
+    if (attachment.status === 'attaching') {
+      console.log('=== PROVISIONING ===');
+      console.log('⏳ Volume is being attached (10-30 seconds)');
+      console.log('');
+      console.log('To check status:');
+      console.log(`  INSTANCE_ID="<instance-id>" VOLUME_ATTACHMENT_ID="${attachment.id}" \\`);
+      console.log('    bru run auth/get-iam-token.bru vpc/volumes/attachments/get-volume-attachment.bru --env prod');
+      console.log('');
+    }
+
+    console.log('=== NEXT STEPS ===');
+    console.log('1. Wait for status to become "attached" (if currently attaching)');
+    console.log('2. SSH/RDP into the instance');
+    console.log('3. Configure the volume in the OS:');
+    console.log('');
+    console.log('LINUX - First Time (new volume):');
+    console.log('  lsblk                              # Check device name');
+    console.log('  sudo mkfs.ext4 /dev/vdb            # Create filesystem');
+    console.log('  sudo mkdir -p /mnt/data            # Create mount point');
+    console.log('  sudo mount /dev/vdb /mnt/data      # Mount volume');
+    console.log('  df -h /mnt/data                    # Verify');
+    console.log('');
+    console.log('LINUX - Existing Volume:');
+    console.log('  sudo mkdir -p /mnt/data');
+    console.log('  sudo mount /dev/vdb /mnt/data');
+    console.log('');
+    console.log('WINDOWS:');
+    console.log('  diskmgmt.msc → Online → Initialize → Format → Assign drive letter');
+
+  } else if (res.status === 400) {
+    console.error('✗ Bad Request - Invalid parameters\n');
+    console.error('Common issues:');
+    console.error('  - Volume is not in "available" status');
+    console.error('  - Volume is already attached to another instance');
+    console.error('  - Invalid instance or volume ID');
+    console.error('');
+    if (res.body && res.body.errors) {
+      console.error('Error details:');
+      res.body.errors.forEach(err => {
+        console.error(`  - ${err.message || 'Unknown error'}`);
+      });
+    }
+    console.error('');
+    console.error('Check volume status:');
+    console.error('  VOLUME_ID="<volume-id>" bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod');
+
+  } else if (res.status === 404) {
+    console.error('✗ Not Found\n');
+    console.error('Possible causes:');
+    console.error('  - Instance ID is incorrect');
+    console.error('  - Volume ID is incorrect');
+    console.error('  - Resources are in different regions');
+    console.error('');
+    console.error('Verify IDs:');
+    console.error('  Instance: bru run auth/get-iam-token.bru vpc/instances/list-instances.bru --env prod');
+    console.error('  Volume: bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod');
+
+  } else if (res.status === 409) {
+    console.error('✗ Conflict\n');
+    console.error('Common issues:');
+    console.error('  - Volume is already attached to this or another instance');
+    console.error('  - Volume and instance are in different zones');
+    console.error('  - Instance is in a transitional state (creating, deleting)');
+    console.error('');
+    if (res.body && res.body.errors) {
+      console.error('Error details:');
+      res.body.errors.forEach(err => {
+        console.error(`  - ${err.message || 'Unknown error'}`);
+      });
+    }
+    console.error('');
+    console.error('Check volume status:');
+    console.error('  VOLUME_ID="<volume-id>" bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod');
+
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}

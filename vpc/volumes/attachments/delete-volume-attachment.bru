@@ -1,0 +1,220 @@
+meta {
+  name: Delete Volume Attachment
+  type: http
+  seq: 4
+}
+
+delete {
+  url: {{vpc_endpoint}}/v1/instances/{{instance_id}}/volume_attachments/{{volume_attachment_id}}?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+docs {
+  # Detach Volume from Instance
+
+  ## Description
+  Detach a data volume from a virtual server instance. The volume will return to "available" status and can be reattached to the same or different instance.
+
+  ## ⚠️ WARNING
+  - **Unmount First**: Always unmount the volume in the OS before detaching
+  - **Data Loss Risk**: Improper unmounting can cause filesystem corruption
+  - **Boot Volumes**: Cannot detach boot volumes (system will prevent this)
+
+  ## Required Environment Variables
+  - `INSTANCE_ID` - The ID of the instance
+  - `VOLUME_ATTACHMENT_ID` - The ID of the volume attachment (not the volume ID)
+
+  ## Getting the Attachment ID
+  To find the attachment ID:
+  ```bash
+  INSTANCE_ID="r006-abc123..." bru run auth/get-iam-token.bru vpc/volumes/attachments/list-volume-attachments.bru --env prod
+  ```
+
+  ## Prerequisites
+  1. Unmount volume in the OS (see below)
+  2. Volume must be a data volume (not boot volume)
+  3. Have attachment ID ready (not volume ID)
+
+  ## Unmount Volume Before Detaching
+
+  ### Linux
+  ```bash
+  # 1. Check if volume is mounted
+  df -h | grep /mnt/data
+
+  # 2. Stop any processes using the volume
+  lsof +f -- /mnt/data
+  # Kill processes if needed
+
+  # 3. Unmount
+  sudo umount /mnt/data
+
+  # 4. Remove from /etc/fstab (optional, for permanent unmount)
+  sudo vi /etc/fstab
+  # Comment out or remove the volume's line
+
+  # 5. Verify unmounted
+  df -h | grep /mnt/data
+  # Should return nothing
+  ```
+
+  ### Windows
+  ```powershell
+  # 1. Close all files/programs using the volume
+  # 2. Open Disk Management (diskmgmt.msc)
+  # 3. Right-click volume → "Offline"
+  # 4. Wait for status to become "Offline"
+  ```
+
+  ## Example Usage
+
+  ### Using bru
+  ```bash
+  INSTANCE_ID="r006-abc123..." VOLUME_ATTACHMENT_ID="r006-def456..." \
+    bru run auth/get-iam-token.bru vpc/volumes/attachments/delete-volume-attachment.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  INSTANCE_ID="r006-abc123..." VOLUME_ATTACHMENT_ID="r006-def456..." mise run volumes:detach
+  ```
+
+  ## Response
+  - **204**: No Content - Volume detached successfully
+  - **404**: Not Found - Instance or attachment ID does not exist
+  - **409**: Conflict - Cannot detach boot volume
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## Detachment Time
+  - Typical: 10-30 seconds
+  - Status: detaching → (attachment deleted)
+  - Volume status: attached → available
+
+  ## After Detachment
+  - Volume returns to "available" status
+  - Volume can be:
+    - Reattached to same instance
+    - Attached to different instance (same zone)
+    - Deleted
+    - Kept for later use
+  - Volume charges continue until deleted
+  - Data is preserved
+
+  ## Common Issues
+
+  ### Filesystem Still Mounted
+  - Detachment may succeed but OS errors will occur
+  - Always unmount in OS first
+  - If forgotten, reattach and properly unmount
+
+  ### Boot Volume Detachment
+  - API will return 409 Conflict
+  - Boot volumes cannot be detached (instance needs OS)
+  - Only data volumes can be detached
+
+  ### Volume Still Shows "Detaching"
+  - Normal for 10-30 seconds
+  - Wait and check volume status
+  - If stuck, contact IBM Cloud support
+
+  ## Reattaching the Same Volume
+
+  After detaching, you can reattach:
+  ```bash
+  # Volume is now in "available" status
+  INSTANCE_ID="<same-or-different-instance>" VOLUME_ID="<volume-id>" \
+    bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod
+
+  # Then mount in OS (no need to format - data is preserved)
+  sudo mount /dev/vdb /mnt/data
+  ```
+
+  ## Next Steps
+  After detachment:
+  1. Verify volume is in "available" status
+  2. Decide: reattach, delete, or keep for later
+  3. If done with volume, delete to stop charges
+  4. If reattaching, use `create-volume-attachment.bru`
+
+  ## Related Endpoints
+  - `list-volume-attachments.bru` - Find attachment ID
+  - `create-volume-attachment.bru` - Reattach volume
+  - `get-volume.bru` - Check volume status after detachment
+  - `delete-volume.bru` - Delete volume permanently
+}
+
+script:post-response {
+  if (res.status === 204) {
+    console.log('✓ Volume detached successfully!\n');
+    console.log('The volume has been detached from the instance.');
+    console.log('');
+    console.log('=== VOLUME STATUS ===');
+    console.log('Volume is now in "available" status and can be:');
+    console.log('  - Reattached to this instance');
+    console.log('  - Attached to a different instance (same zone)');
+    console.log('  - Deleted (if no longer needed)');
+    console.log('  - Kept for later use');
+    console.log('');
+    console.log('⚠️  Volume charges continue until deleted');
+    console.log('');
+    console.log('=== NEXT STEPS ===');
+    console.log('1. Verify detachment:');
+    console.log('     bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod');
+    console.log('');
+    console.log('2. To reattach to same or different instance:');
+    console.log('     INSTANCE_ID="<instance-id>" VOLUME_ID="<volume-id>" \\');
+    console.log('       bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod');
+    console.log('');
+    console.log('3. To delete volume permanently:');
+    console.log('     VOLUME_ID="<volume-id>" \\');
+    console.log('       bru run auth/get-iam-token.bru vpc/volumes/delete-volume.bru --env prod');
+    console.log('');
+    console.log('4. If reattaching, mount in OS (no format needed - data preserved):');
+    console.log('     sudo mount /dev/vdb /mnt/data');
+
+  } else if (res.status === 404) {
+    console.error('✗ Not Found\n');
+    console.error('Possible causes:');
+    console.error('  - Instance ID is incorrect');
+    console.error('  - Attachment ID is incorrect');
+    console.error('  - Volume is already detached');
+    console.error('  - Resources are in different regions');
+    console.error('');
+    console.error('To list all attachments:');
+    console.error('  INSTANCE_ID="<instance-id>" \\');
+    console.error('    bru run auth/get-iam-token.bru vpc/volumes/attachments/list-volume-attachments.bru --env prod');
+
+  } else if (res.status === 409) {
+    console.error('✗ Conflict - Cannot detach volume\n');
+    console.error('Common causes:');
+    console.error('  - Attempting to detach boot volume (not allowed)');
+    console.error('  - Volume is in transitional state');
+    console.error('  - Instance is being deleted');
+    console.error('');
+    if (res.body && res.body.errors) {
+      console.error('Error details:');
+      res.body.errors.forEach(err => {
+        console.error(`  - ${err.message || 'Unknown error'}`);
+      });
+    }
+    console.error('');
+    console.error('Note: Boot volumes cannot be detached from running instances.');
+    console.error('Only data volumes can be detached.');
+
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}

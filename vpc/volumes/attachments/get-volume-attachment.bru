@@ -1,0 +1,152 @@
+meta {
+  name: Get Volume Attachment
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/instances/{{instance_id}}/volume_attachments/{{volume_attachment_id}}?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+docs {
+  # Get Specific Volume Attachment
+
+  ## Description
+  Get detailed information about a specific volume attachment, including volume details, device information, and attachment status.
+
+  ## Required Environment Variables
+  - `INSTANCE_ID` - The ID of the instance
+  - `VOLUME_ATTACHMENT_ID` - The ID of the volume attachment
+
+  ## Example Usage
+
+  ### Using bru
+  ```bash
+  INSTANCE_ID="r006-abc123..." VOLUME_ATTACHMENT_ID="r006-def456..." \
+    bru run auth/get-iam-token.bru vpc/volumes/attachments/get-volume-attachment.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  INSTANCE_ID="r006-abc123..." VOLUME_ATTACHMENT_ID="r006-def456..." mise run volumes:get-attachment
+  ```
+
+  ## Response
+  - **200**: Success - Returns attachment details
+  - **404**: Not Found - Instance or attachment ID does not exist
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## Response Fields
+  - `id` - Attachment ID
+  - `name` - Attachment name
+  - `volume` - Complete volume details
+  - `device` - Device information (maps to /dev/vd* in Linux)
+  - `type` - "boot" or "data"
+  - `status` - Attachment status (attached, attaching, detaching)
+  - `delete_volume_on_instance_delete` - Deletion behavior
+  - `bandwidth` - I/O bandwidth limit in Mbps
+
+  ## Next Steps
+  After viewing attachment:
+  1. Note device ID for OS operations (mount, format)
+  2. Check status before detaching
+  3. Verify volume details (capacity, IOPS)
+
+  ## Related Endpoints
+  - `list-volume-attachments.bru` - List all attachments for instance
+  - `delete-volume-attachment.bru` - Detach volume
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const attachment = res.body;
+
+    console.log('=== VOLUME ATTACHMENT DETAILS ===\n');
+
+    console.log('=== ATTACHMENT INFO ===');
+    console.log(`Name: ${attachment.name}`);
+    console.log(`Attachment ID: ${attachment.id}`);
+    console.log(`Type: ${attachment.type}`);
+    console.log(`Status: ${attachment.status}`);
+    console.log(`Bandwidth: ${attachment.bandwidth || 'N/A'} Mbps`);
+    console.log('');
+
+    console.log('=== DEVICE INFO ===');
+    console.log(`Device ID: ${attachment.device?.id || 'N/A'}`);
+    if (attachment.type === 'boot') {
+      console.log('Linux Path: /dev/vda (boot volume)');
+    } else {
+      console.log('Linux Path: /dev/vdb, /dev/vdc, etc. (check dmesg or lsblk)');
+    }
+    console.log('Windows: Visible in Disk Management');
+    console.log('');
+
+    console.log('=== VOLUME INFO ===');
+    if (attachment.volume) {
+      console.log(`Name: ${attachment.volume.name || 'N/A'}`);
+      console.log(`Volume ID: ${attachment.volume.id || 'N/A'}`);
+      console.log(`Capacity: ${attachment.volume.capacity || 'N/A'} GB`);
+      console.log(`IOPS: ${attachment.volume.iops || 'N/A'}`);
+      console.log(`Profile: ${attachment.volume.profile?.name || 'N/A'}`);
+    }
+    console.log('');
+
+    console.log('=== DELETION BEHAVIOR ===');
+    console.log(`Delete volume when instance is deleted: ${attachment.delete_volume_on_instance_delete || false}`);
+    if (attachment.delete_volume_on_instance_delete) {
+      console.log('⚠️  Volume will be permanently deleted if instance is deleted');
+    } else {
+      console.log('✓ Volume will be preserved if instance is deleted');
+    }
+    console.log('');
+
+    console.log('=== NEXT STEPS ===');
+    if (attachment.status === 'attached') {
+      console.log('✓ Volume is attached and ready to use');
+      console.log('');
+      console.log('To mount in the OS (Linux):');
+      console.log('  sudo mkfs.ext4 /dev/vdb  # First time only');
+      console.log('  sudo mkdir -p /mnt/data');
+      console.log('  sudo mount /dev/vdb /mnt/data');
+      console.log('');
+      console.log('To detach:');
+      console.log(`  INSTANCE_ID="<instance-id>" VOLUME_ATTACHMENT_ID="${attachment.id}" \\`);
+      console.log('    bru run auth/get-iam-token.bru vpc/volumes/attachments/delete-volume-attachment.bru --env prod');
+    } else if (attachment.status === 'attaching') {
+      console.log('⏳ Volume is being attached (10-30 seconds)');
+      console.log('Wait and check status again');
+    } else if (attachment.status === 'detaching') {
+      console.log('⏳ Volume is being detached');
+      console.log('Wait for completion before reattaching');
+    }
+
+  } else if (res.status === 404) {
+    console.error('✗ Attachment or instance not found\n');
+    console.error('Possible causes:');
+    console.error('  - Instance ID is incorrect');
+    console.error('  - Attachment ID is incorrect');
+    console.error('  - Volume has been detached');
+    console.error('  - Instance is in a different region');
+    console.error('');
+    console.error('To list all attachments for an instance:');
+    console.error('  INSTANCE_ID="<instance-id>" \\');
+    console.error('    bru run auth/get-iam-token.bru vpc/volumes/attachments/list-volume-attachments.bru --env prod');
+
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}

@@ -1,0 +1,171 @@
+meta {
+  name: Delete Volume
+  type: http
+  seq: 6
+}
+
+delete {
+  url: {{vpc_endpoint}}/v1/volumes/{{volume_id}}?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+docs {
+  # Delete Volume
+
+  ## Description
+  Permanently delete a block storage volume. This operation cannot be undone and all data on the volume will be lost.
+
+  ## ⚠️ WARNING
+  - **Data Loss**: All data on the volume will be permanently deleted
+  - **No Recovery**: Deleted volumes cannot be recovered
+  - **Must Detach**: Volume must be detached from all instances before deletion
+  - **Snapshots**: Consider creating a snapshot before deletion for backup
+
+  ## Required Environment Variables
+  - `VOLUME_ID` - The ID of the volume to delete
+
+  ## Prerequisites
+  Before deleting a volume:
+  1. Volume must be in "available" status (not "attached")
+  2. Detach from all instances if currently attached
+  3. Consider creating a snapshot for backup
+  4. Verify you have the correct volume ID (deletion is permanent)
+
+  ## Example Usage
+
+  ### Using bru
+  ```bash
+  VOLUME_ID="r006-abc123..." bru run auth/get-iam-token.bru vpc/volumes/delete-volume.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  VOLUME_ID="r006-abc123..." mise run volumes:delete
+  ```
+
+  ## Response
+  - **204**: No Content - Volume deleted successfully
+  - **404**: Not Found - Volume ID does not exist
+  - **409**: Conflict - Volume is still attached to an instance
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## If Volume is Attached
+
+  You must detach the volume before deletion:
+
+  ### 1. List attachments
+  ```bash
+  INSTANCE_ID="<instance-id>" bru run auth/get-iam-token.bru vpc/volumes/attachments/list-volume-attachments.bru --env prod
+  ```
+
+  ### 2. Detach from instance
+  ```bash
+  INSTANCE_ID="<instance-id>" VOLUME_ATTACHMENT_ID="<attachment-id>" \
+    bru run auth/get-iam-token.bru vpc/volumes/attachments/delete-volume-attachment.bru --env prod
+  ```
+
+  ### 3. Wait for detachment (10-30 seconds)
+  ```bash
+  VOLUME_ID="<volume-id>" bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod
+  ```
+
+  ### 4. Delete volume
+  ```bash
+  VOLUME_ID="<volume-id>" bru run auth/get-iam-token.bru vpc/volumes/delete-volume.bru --env prod
+  ```
+
+  ## Snapshot Before Deletion (Optional)
+
+  To create a backup before deleting:
+  ```bash
+  # Create snapshot (via IBM Cloud Console or CLI - not yet in Bruno collection)
+  ibmcloud is snapshot-create my-volume-snapshot --source-volume <volume-id>
+
+  # Wait for snapshot to complete
+  ibmcloud is snapshot <snapshot-id>
+
+  # Then delete volume
+  VOLUME_ID="<volume-id>" bru run auth/get-iam-token.bru vpc/volumes/delete-volume.bru --env prod
+  ```
+
+  ## Cost Impact
+  - Deletion stops all volume charges immediately
+  - No pro-rated refunds for partial month
+  - Snapshots continue to incur charges separately
+
+  ## Next Steps
+  After deletion:
+  - Volume ID will no longer be valid
+  - Data is permanently destroyed
+  - If you need storage again, create a new volume
+
+  ## Related Endpoints
+  - `list-volumes.bru` - Verify deletion
+  - `attachments/delete-volume-attachment.bru` - Detach before delete
+  - `get-volume.bru` - Check status before delete
+}
+
+script:post-response {
+  if (res.status === 204) {
+    console.log('✓ Volume deleted successfully!\n');
+    console.log('The volume and all its data have been permanently removed.');
+    console.log('');
+    console.log('=== NEXT STEPS ===');
+    console.log('✓ Volume charges have stopped');
+    console.log('✓ Data is permanently destroyed');
+    console.log('✓ Volume ID is no longer valid');
+    console.log('');
+    console.log('To verify deletion, run:');
+    console.log('  bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod');
+
+  } else if (res.status === 404) {
+    console.error('✗ Volume not found\n');
+    console.error('Possible causes:');
+    console.error('  - Volume ID is incorrect');
+    console.error('  - Volume has already been deleted');
+    console.error('  - Volume is in a different region');
+    console.error('');
+    console.error('To list all volumes:');
+    console.error('  bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod');
+
+  } else if (res.status === 409) {
+    console.error('✗ Conflict - Cannot delete attached volume\n');
+    console.error('The volume is still attached to one or more instances.');
+    console.error('');
+    console.error('You must detach the volume before deletion:');
+    console.error('');
+    console.error('1. Get volume details to see attachments:');
+    console.error('     VOLUME_ID="<volume-id>" bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod');
+    console.error('');
+    console.error('2. Detach from each instance:');
+    console.error('     INSTANCE_ID="<instance-id>" VOLUME_ATTACHMENT_ID="<attachment-id>" \\');
+    console.error('       bru run auth/get-iam-token.bru vpc/volumes/attachments/delete-volume-attachment.bru --env prod');
+    console.error('');
+    console.error('3. Wait 10-30 seconds for detachment');
+    console.error('');
+    console.error('4. Try deletion again');
+    console.error('');
+    if (res.body && res.body.errors) {
+      console.error('Error details:');
+      res.body.errors.forEach(err => {
+        console.error(`  - ${err.message || 'Unknown error'}`);
+      });
+    }
+
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}

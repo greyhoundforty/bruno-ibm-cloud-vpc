@@ -1,0 +1,173 @@
+meta {
+  name: Get Volume
+  type: http
+  seq: 3
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/volumes/{{volume_id}}?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+docs {
+  # Get Specific Volume
+
+  ## Description
+  Get detailed information about a specific block storage volume including capacity, IOPS, attachments, and encryption details.
+
+  ## Required Environment Variables
+  - `VOLUME_ID` - The ID of the volume to retrieve
+
+  ## Example Usage
+
+  ### Using bru
+  ```bash
+  VOLUME_ID="r006-abc123..." bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  VOLUME_ID="r006-abc123..." mise run volumes:get
+  ```
+
+  ## Response
+  - **200**: Success - Returns complete volume details
+  - **404**: Not Found - Volume ID does not exist
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## Response Fields
+  - `id` - Volume ID
+  - `name` - Volume name
+  - `status` - Current state (available, pending, attached, failed)
+  - `capacity` - Size in GB
+  - `iops` - Provisioned IOPS
+  - `profile` - Volume profile details
+  - `zone` - Availability zone
+  - `encryption_key` - Encryption key CRN (if user-managed encryption)
+  - `volume_attachments` - Array of instance attachments
+  - `resource_group` - Resource group details
+  - `created_at` - Creation timestamp
+  - `bandwidth` - Bandwidth limit in Mbps
+
+  ## Next Steps
+  Based on volume status:
+  - **available** - Can attach to instance
+  - **attached** - View attachment details, consider detaching
+  - **pending** - Wait for provisioning to complete
+  - **failed** - Delete and recreate
+
+  ## Related Endpoints
+  - `list-volumes.bru` - List all volumes
+  - `update-volume.bru` - Update volume name or capacity
+  - `delete-volume.bru` - Delete volume
+  - `attachments/create-volume-attachment.bru` - Attach to instance
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const volume = res.body;
+
+    console.log('=== VOLUME DETAILS ===\n');
+    console.log(`Name: ${volume.name}`);
+    console.log(`ID: ${volume.id}`);
+    console.log(`Status: ${volume.status}`);
+    console.log(`CRN: ${volume.crn}`);
+    console.log('');
+
+    console.log('=== CAPACITY & PERFORMANCE ===');
+    console.log(`Capacity: ${volume.capacity} GB`);
+    console.log(`IOPS: ${volume.iops}`);
+    console.log(`Profile: ${volume.profile?.name || 'N/A'}`);
+    console.log(`Bandwidth: ${volume.bandwidth || 'N/A'} Mbps`);
+    console.log('');
+
+    console.log('=== LOCATION ===');
+    console.log(`Zone: ${volume.zone?.name || 'N/A'}`);
+    console.log(`Region: ${volume.zone?.region || 'N/A'}`);
+    console.log('');
+
+    console.log('=== ENCRYPTION ===');
+    console.log(`Type: ${volume.encryption}`);
+    if (volume.encryption_key) {
+      console.log(`Key CRN: ${volume.encryption_key.crn}`);
+    } else {
+      console.log('Key: Provider-managed (IBM Cloud encryption)');
+    }
+    console.log('');
+
+    console.log('=== RESOURCE GROUP ===');
+    console.log(`Name: ${volume.resource_group?.name || 'N/A'}`);
+    console.log(`ID: ${volume.resource_group?.id || 'N/A'}`);
+    console.log('');
+
+    console.log('=== ATTACHMENTS ===');
+    if (volume.volume_attachments && volume.volume_attachments.length > 0) {
+      console.log(`Count: ${volume.volume_attachments.length}`);
+      volume.volume_attachments.forEach((attachment, index) => {
+        console.log(`\nAttachment ${index + 1}:`);
+        console.log(`  Instance Name: ${attachment.instance?.name || 'N/A'}`);
+        console.log(`  Instance ID: ${attachment.instance?.id || 'N/A'}`);
+        console.log(`  Device: ${attachment.device?.id || 'N/A'}`);
+        console.log(`  Type: ${attachment.type || 'N/A'}`);
+        console.log(`  Status: ${attachment.status || 'N/A'}`);
+        console.log(`  Delete on Instance Delete: ${attachment.delete_volume_on_instance_delete || false}`);
+      });
+    } else {
+      console.log('Count: 0');
+      console.log('Status: Available for attachment');
+      console.log('\nTo attach this volume to an instance, run:');
+      console.log(`  INSTANCE_ID="<instance-id>" VOLUME_ID="${volume.id}" \\`);
+      console.log('    bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod');
+    }
+    console.log('');
+
+    console.log('=== TIMESTAMPS ===');
+    console.log(`Created: ${volume.created_at}`);
+    console.log('');
+
+    console.log('=== NEXT STEPS ===');
+    if (volume.status === 'available') {
+      console.log('✓ Volume is ready');
+      console.log('  - Can be attached to an instance');
+      console.log('  - Can be updated (name, capacity)');
+      console.log('  - Can be deleted');
+    } else if (volume.status === 'attached') {
+      console.log('✓ Volume is in use');
+      console.log('  - Currently attached to instance(s)');
+      console.log('  - Must detach before deletion');
+      console.log('  - Can increase capacity while attached');
+    } else if (volume.status === 'pending') {
+      console.log('⏳ Volume is being provisioned');
+      console.log('  - Wait 30-60 seconds');
+      console.log('  - Check status again with this command');
+    } else if (volume.status === 'failed') {
+      console.log('✗ Volume creation failed');
+      console.log('  - Check error details in console');
+      console.log('  - Delete and recreate');
+    }
+
+  } else if (res.status === 404) {
+    console.error('Volume not found.');
+    console.error('Possible causes:');
+    console.error('  - Volume ID is incorrect');
+    console.error('  - Volume has been deleted');
+    console.error('  - Volume is in a different region');
+    console.error('\nTo list all volumes in current region:');
+    console.error('  bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod');
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}

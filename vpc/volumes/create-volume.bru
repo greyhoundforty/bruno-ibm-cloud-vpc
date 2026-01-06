@@ -1,0 +1,258 @@
+meta {
+  name: Create Volume
+  type: http
+  seq: 4
+}
+
+post {
+  url: {{vpc_endpoint}}/v1/volumes?version={{api_version}}&generation=2
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+headers {
+  Accept: application/json
+  Content-Type: application/json
+}
+
+params:query {
+  version: {{api_version}}
+  generation: 2
+}
+
+body:json {
+  {
+    "name": "{{VOLUME_NAME}}",
+    "profile": {
+      "name": "{{VOLUME_PROFILE}}"
+    },
+    "zone": {
+      "name": "{{ZONE_NAME}}"
+    },
+    "capacity": {{VOLUME_CAPACITY}},
+    "resource_group": {
+      "id": "{{RESOURCE_GROUP_ID}}"
+    },
+    "user_tags": [{{TAGS}}]
+  }
+}
+
+docs {
+  # Create Block Storage Volume
+
+  ## Description
+  Create a new block storage volume for persistent data storage. Volumes can be attached to virtual server instances and provide high-performance, durable storage.
+
+  ## Required Environment Variables
+  - `VOLUME_NAME` - Name for the new volume (must be unique)
+  - `ZONE_NAME` - Availability zone (e.g., "us-south-1", "us-south-2")
+  - `VOLUME_CAPACITY` - Size in GB (10-16,000)
+  - `VOLUME_PROFILE` - Performance tier (see profiles below)
+
+  ## Optional Environment Variables
+  - `RESOURCE_GROUP_ID` - Resource group ID (uses account default if not specified)
+  - `VOLUME_IOPS` - Custom IOPS (only for "custom" profile, 100-48,000)
+  - `TAGS` - Comma-separated quoted tags (e.g., `"demo","owner:ryan"`)
+
+  ## Volume Profiles
+
+  ### general-purpose (Recommended for most workloads)
+  - **IOPS**: 3 per GB (100-48,000 total)
+  - **Capacity**: 10-16,000 GB
+  - **Use Case**: Development, testing, standard workloads
+  - **Cost**: Lowest
+  - **Example**: 100 GB = 300 IOPS, 500 GB = 1,500 IOPS
+
+  ### 5iops-tier (Production workloads)
+  - **IOPS**: 5 per GB (100-48,000 total)
+  - **Capacity**: 10-9,600 GB
+  - **Use Case**: Production databases, application servers
+  - **Cost**: Moderate
+  - **Example**: 100 GB = 500 IOPS, 500 GB = 2,500 IOPS
+
+  ### 10iops-tier (High performance)
+  - **IOPS**: 10 per GB (100-48,000 total)
+  - **Capacity**: 10-4,800 GB
+  - **Use Case**: High-performance databases, analytics
+  - **Cost**: Higher
+  - **Example**: 100 GB = 1,000 IOPS, 500 GB = 5,000 IOPS
+
+  ### custom (Specific performance requirements)
+  - **IOPS**: User-defined (100-48,000)
+  - **Capacity**: 10-16,000 GB
+  - **Use Case**: Precise performance tuning
+  - **Cost**: Based on provisioned IOPS
+  - **Note**: Must specify `VOLUME_IOPS` environment variable
+
+  ## Capacity Guidelines
+  - **Minimum**: 10 GB
+  - **Maximum**: 16,000 GB (16 TB)
+  - **Increment**: 1 GB
+  - **Recommendation**: Start smaller, increase capacity later if needed
+
+  ## Example Usage
+
+  ### Using bru - General Purpose Volume
+  ```bash
+  VOLUME_NAME="data-volume" ZONE_NAME="us-south-1" VOLUME_CAPACITY=100 VOLUME_PROFILE="general-purpose" \
+    bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod
+  ```
+
+  ### Using bru - High Performance Volume
+  ```bash
+  VOLUME_NAME="db-volume" ZONE_NAME="us-south-1" VOLUME_CAPACITY=500 VOLUME_PROFILE="10iops-tier" \
+    bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  VOLUME_NAME="my-volume" ZONE_NAME="us-south-1" VOLUME_CAPACITY=100 VOLUME_PROFILE="general-purpose" \
+    mise run volumes:create
+  ```
+
+  ## Response
+  - **201**: Created - Volume created successfully
+  - **400**: Bad Request - Invalid parameters (check capacity, profile, zone)
+  - **409**: Conflict - Volume name already exists
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## Provisioning Time
+  - Typical: 30-60 seconds
+  - Status changes: pending → available
+  - Check status with `get-volume.bru`
+
+  ## Cost Considerations
+  - Charged by GB/month and IOPS/month
+  - general-purpose is most cost-effective
+  - Higher IOPS tiers cost more per GB
+  - Snapshot storage billed separately
+  - No charge for unattached volumes (only capacity)
+
+  ## Next Steps
+  After creation:
+  1. Wait for status to become "available" (30-60 seconds)
+  2. Attach to instance using `attachments/create-volume-attachment.bru`
+  3. Mount and format in the instance OS
+  4. Begin using storage
+
+  ## Related Endpoints
+  - `list-volume-profiles.bru` - View available profiles
+  - `get-volume.bru` - Check volume status
+  - `attachments/create-volume-attachment.bru` - Attach to instance
+  - `update-volume.bru` - Increase capacity later
+}
+
+script:post-response {
+  if (res.status === 201) {
+    const volume = res.body;
+
+    console.log('✓ Volume created successfully!\n');
+
+    console.log('=== VOLUME DETAILS ===');
+    console.log(`Name: ${volume.name}`);
+    console.log(`ID: ${volume.id}`);
+    console.log(`Status: ${volume.status}`);
+    console.log('');
+
+    console.log('=== CAPACITY & PERFORMANCE ===');
+    console.log(`Capacity: ${volume.capacity} GB`);
+    console.log(`IOPS: ${volume.iops}`);
+    console.log(`Profile: ${volume.profile?.name || 'N/A'}`);
+    console.log(`Bandwidth: ${volume.bandwidth || 'N/A'} Mbps`);
+    console.log('');
+
+    console.log('=== LOCATION ===');
+    console.log(`Zone: ${volume.zone?.name || 'N/A'}`);
+    console.log('');
+
+    console.log('=== ENCRYPTION ===');
+    console.log(`Type: ${volume.encryption || 'provider_managed'}`);
+    console.log('Provider-managed encryption enabled by default');
+    console.log('');
+
+    console.log('=== RESOURCE GROUP ===');
+    console.log(`Name: ${volume.resource_group?.name || 'N/A'}`);
+    console.log(`ID: ${volume.resource_group?.id || 'N/A'}`);
+    console.log('');
+
+    console.log('=== PROVISIONING ===');
+    if (volume.status === 'pending') {
+      console.log('⏳ Volume is being provisioned (30-60 seconds)');
+      console.log('');
+      console.log('To check status, run:');
+      console.log(`  VOLUME_ID="${volume.id}" bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod`);
+      console.log('');
+      console.log('Or using mise:');
+      console.log(`  VOLUME_ID="${volume.id}" mise run volumes:get`);
+    } else if (volume.status === 'available') {
+      console.log('✓ Volume is ready to use!');
+    }
+    console.log('');
+
+    console.log('=== NEXT STEPS ===');
+    console.log('1. Wait for status to become "available" (if pending)');
+    console.log('2. Attach to an instance:');
+    console.log(`     INSTANCE_ID="<instance-id>" VOLUME_ID="${volume.id}" \\`);
+    console.log('       bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod');
+    console.log('');
+    console.log('3. In the instance, mount and format the volume:');
+    console.log('     sudo mkfs.ext4 /dev/vdd');
+    console.log('     sudo mkdir -p /mnt/data');
+    console.log('     sudo mount /dev/vdd /mnt/data');
+    console.log('');
+    console.log('4. Add to /etc/fstab for persistence (use UUID from blkid)');
+
+    console.log('');
+    console.log('=== COST ESTIMATE ===');
+    const capacityCost = (volume.capacity * 0.10).toFixed(2);
+    const iopsCost = (volume.iops * 0.0005).toFixed(2);
+    const totalCost = (parseFloat(capacityCost) + parseFloat(iopsCost)).toFixed(2);
+    console.log(`Capacity: ~$${capacityCost}/month (${volume.capacity} GB × $0.10/GB)`);
+    console.log(`IOPS: ~$${iopsCost}/month (${volume.iops} IOPS × $0.0005/IOPS)`);
+    console.log(`Estimated Total: ~$${totalCost}/month`);
+    console.log('(Approximate - check IBM Cloud pricing for exact rates)');
+
+  } else if (res.status === 400) {
+    console.error('✗ Bad Request - Invalid parameters\n');
+    console.error('Common issues:');
+    console.error('  - Capacity out of range (10-16,000 GB)');
+    console.error('  - Invalid zone name');
+    console.error('  - Invalid profile name');
+    console.error('  - Capacity exceeds profile maximum');
+    console.error('');
+    if (res.body && res.body.errors) {
+      console.error('Error details:');
+      res.body.errors.forEach(err => {
+        console.error(`  - ${err.message || 'Unknown error'}`);
+      });
+    }
+    console.error('');
+    console.error('To list valid profiles:');
+    console.error('  bru run auth/get-iam-token.bru vpc/volumes/list-volume-profiles.bru --env prod');
+
+  } else if (res.status === 409) {
+    console.error('✗ Conflict - Volume name already exists\n');
+    console.error('Volume names must be unique within your account.');
+    console.error('');
+    console.error('Solutions:');
+    console.error('  1. Choose a different name');
+    console.error('  2. Delete the existing volume if no longer needed');
+    console.error('  3. List existing volumes to check names:');
+    console.error('       bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod');
+
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}

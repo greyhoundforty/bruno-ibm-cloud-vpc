@@ -329,6 +329,156 @@ NEW_INSTANCE_NAME="web-01" VPC_ID=r006-abc ZONE_NAME=us-south-1 PROFILE_NAME=cx2
 **Prerequisites**: VPC, subnet, security group, SSH key must exist
 **Provisioning Time**: 3-5 minutes to reach "running" status
 
+### Block Storage Volume Operations
+
+#### List Volume Profiles
+```bash
+# Mise
+mise run volumes:list-profiles
+
+# Bru equivalent
+bru run auth/get-iam-token.bru vpc/volumes/list-volume-profiles.bru --env prod
+```
+
+**Description**: List volume profiles (IOPS tiers)
+**Output**: Profile names, IOPS ranges, capacity limits, use cases
+**Profiles**: general-purpose (3 IOPS/GB), 5iops-tier, 10iops-tier, custom
+
+#### List Volumes
+```bash
+# Mise
+mise run volumes:list
+
+# Bru equivalent
+bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod
+```
+
+**Description**: List all block storage volumes
+**Output**: Volume names, IDs, capacity, IOPS, status, attachments
+
+#### Get Specific Volume
+```bash
+# Mise
+VOLUME_ID=r006-abc123... mise run volumes:get
+
+# Bru equivalent
+VOLUME_ID=r006-abc123... bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod
+```
+
+**Description**: Get volume details
+**Required**: `VOLUME_ID`
+**Output**: Capacity, IOPS, profile, zone, encryption, attachments
+
+#### Create Volume
+```bash
+# Mise
+VOLUME_NAME="data-volume" ZONE_NAME=us-south-1 VOLUME_CAPACITY=100 VOLUME_PROFILE="general-purpose" mise run volumes:create
+
+# Bru equivalent
+VOLUME_NAME="data-volume" ZONE_NAME=us-south-1 VOLUME_CAPACITY=100 VOLUME_PROFILE="general-purpose" \
+  bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod
+```
+
+**Description**: Create block storage volume
+**Required**: `VOLUME_NAME`, `ZONE_NAME`, `VOLUME_CAPACITY` (GB), `VOLUME_PROFILE`
+**Optional**: `RESOURCE_GROUP_ID`, `VOLUME_IOPS` (for custom profile)
+**Capacity Range**: 10-16,000 GB
+**Provisioning Time**: 30-60 seconds
+
+#### Update Volume
+```bash
+# Mise - Increase capacity
+VOLUME_ID=r006-abc VOLUME_CAPACITY=200 mise run volumes:update
+
+# Bru equivalent
+VOLUME_ID=r006-abc VOLUME_CAPACITY=200 bru run auth/get-iam-token.bru vpc/volumes/update-volume.bru --env prod
+
+# Mise - Rename volume
+VOLUME_ID=r006-abc NEW_VOLUME_NAME="production-data" mise run volumes:update
+
+# Bru equivalent
+VOLUME_ID=r006-abc NEW_VOLUME_NAME="production-data" \
+  bru run auth/get-iam-token.bru vpc/volumes/update-volume.bru --env prod
+```
+
+**Description**: Update volume name or capacity
+**Required**: `VOLUME_ID`
+**Optional**: `NEW_VOLUME_NAME`, `VOLUME_CAPACITY`
+**Note**: Can only increase capacity, never decrease
+
+#### Delete Volume
+```bash
+# Mise
+VOLUME_ID=r006-abc123... mise run volumes:delete
+
+# Bru equivalent
+VOLUME_ID=r006-abc123... bru run auth/get-iam-token.bru vpc/volumes/delete-volume.bru --env prod
+```
+
+**Description**: Delete volume permanently
+**Required**: `VOLUME_ID`
+**Prerequisites**: Volume must be detached from all instances
+**Warning**: Data loss - cannot be recovered
+
+#### List Volume Attachments
+```bash
+# Mise
+INSTANCE_ID=r006-inst123... mise run volumes:list-attachments
+
+# Bru equivalent
+INSTANCE_ID=r006-inst123... bru run auth/get-iam-token.bru vpc/volumes/attachments/list-volume-attachments.bru --env prod
+```
+
+**Description**: List volume attachments for an instance
+**Required**: `INSTANCE_ID`
+**Output**: Boot and data volumes, device IDs, attachment status
+
+#### Get Volume Attachment
+```bash
+# Mise
+INSTANCE_ID=r006-inst VOLUME_ATTACHMENT_ID=r006-attach mise run volumes:get-attachment
+
+# Bru equivalent
+INSTANCE_ID=r006-inst VOLUME_ATTACHMENT_ID=r006-attach \
+  bru run auth/get-iam-token.bru vpc/volumes/attachments/get-volume-attachment.bru --env prod
+```
+
+**Description**: Get specific attachment details
+**Required**: `INSTANCE_ID`, `VOLUME_ATTACHMENT_ID`
+**Output**: Device info, volume details, deletion behavior
+
+#### Attach Volume to Instance
+```bash
+# Mise
+INSTANCE_ID=r006-inst VOLUME_ID=r006-vol mise run volumes:attach
+
+# Bru equivalent
+INSTANCE_ID=r006-inst VOLUME_ID=r006-vol \
+  bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod
+```
+
+**Description**: Attach volume to instance
+**Required**: `INSTANCE_ID`, `VOLUME_ID`
+**Prerequisites**: Volume in "available" status, same zone as instance
+**Attachment Time**: 10-30 seconds
+**Next Steps**: Mount in OS (mkfs.ext4 + mount for Linux)
+
+#### Detach Volume from Instance
+```bash
+# Mise
+INSTANCE_ID=r006-inst VOLUME_ATTACHMENT_ID=r006-attach mise run volumes:detach
+
+# Bru equivalent
+INSTANCE_ID=r006-inst VOLUME_ATTACHMENT_ID=r006-attach \
+  bru run auth/get-iam-token.bru vpc/volumes/attachments/delete-volume-attachment.bru --env prod
+```
+
+**Description**: Detach volume from instance
+**Required**: `INSTANCE_ID`, `VOLUME_ATTACHMENT_ID`
+**Prerequisites**: Unmount volume in OS first
+**Detachment Time**: 10-30 seconds
+**Note**: Cannot detach boot volumes
+
 ### SSH Key Operations
 
 #### List SSH Keys

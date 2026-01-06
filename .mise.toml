@@ -128,3 +128,43 @@ run = "bru run auth/get-iam-token.bru vpc/ssh-keys/list-ssh-keys.bru --env prod"
 description = "Create instance (set NEW_INSTANCE_NAME, VPC_ID, ZONE_NAME, PROFILE_NAME, IMAGE_ID, SUBNET_ID, SECURITY_GROUP_ID, SSH_KEY_ID)"
 run = "bru run auth/get-iam-token.bru vpc/instances/create-instance.bru --env prod"
 
+[tasks."volumes:list-profiles"]
+description = "List volume profiles (IOPS tiers)"
+run = "bru run auth/get-iam-token.bru vpc/volumes/list-volume-profiles.bru --env prod"
+
+[tasks."volumes:list"]
+description = "List all volumes"
+run = "bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod"
+
+[tasks."volumes:get"]
+description = "Get specific volume by ID (set VOLUME_ID)"
+run = "bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod"
+
+[tasks."volumes:create"]
+description = "Create volume (set VOLUME_NAME, ZONE_NAME, VOLUME_CAPACITY, VOLUME_PROFILE)"
+run = "bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod"
+
+[tasks."volumes:update"]
+description = "Update volume (set VOLUME_ID, NEW_VOLUME_NAME or VOLUME_CAPACITY)"
+run = "bru run auth/get-iam-token.bru vpc/volumes/update-volume.bru --env prod"
+
+[tasks."volumes:delete"]
+description = "Delete volume (set VOLUME_ID)"
+run = "bru run auth/get-iam-token.bru vpc/volumes/delete-volume.bru --env prod"
+
+[tasks."volumes:list-attachments"]
+description = "List volume attachments for instance (set INSTANCE_ID)"
+run = "bru run auth/get-iam-token.bru vpc/volumes/attachments/list-volume-attachments.bru --env prod"
+
+[tasks."volumes:get-attachment"]
+description = "Get specific volume attachment (set INSTANCE_ID, VOLUME_ATTACHMENT_ID)"
+run = "bru run auth/get-iam-token.bru vpc/volumes/attachments/get-volume-attachment.bru --env prod"
+
+[tasks."volumes:attach"]
+description = "Attach volume to instance (set INSTANCE_ID, VOLUME_ID)"
+run = "bru run auth/get-iam-token.bru vpc/volumes/attachments/create-volume-attachment.bru --env prod"
+
+[tasks."volumes:detach"]
+description = "Detach volume from instance (set INSTANCE_ID, VOLUME_ATTACHMENT_ID)"
+run = "bru run auth/get-iam-token.bru vpc/volumes/attachments/delete-volume-attachment.bru --env prod"
+

@@ -1,0 +1,148 @@
+meta {
+  name: List Volumes
+  type: http
+  seq: 2
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/volumes?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+docs {
+  # List Block Storage Volumes
+
+  ## Description
+  List all block storage volumes in the current region. Volumes provide persistent storage that can be attached to virtual server instances.
+
+  ## Volume States
+  - **available** - Ready to be attached to an instance
+  - **pending** - Being created or modified
+  - **attached** - Currently attached to an instance
+  - **failed** - Creation or modification failed
+  - **deleting** - Being deleted
+
+  ## Required Environment Variables
+  None - this endpoint requires no parameters
+
+  ## Optional Query Parameters
+  You can filter results by:
+  - Zone name (e.g., `us-south-1`)
+  - Volume attachment instance ID
+  - Resource group ID
+  - Name (exact match)
+
+  To add filters, modify the URL in this file to include query parameters.
+
+  ## Example Usage
+
+  ### Using bru
+  ```bash
+  # List all volumes
+  bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  mise run volumes:list
+  ```
+
+  ## Response
+  - **200**: Success - Returns array of volumes with status, capacity, IOPS, and attachment info
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## Response Fields
+  - `id` - Volume ID (required for get, update, delete, attach operations)
+  - `name` - Volume name
+  - `status` - Current state (available, pending, attached, failed, deleting)
+  - `capacity` - Size in GB (10-16,000)
+  - `iops` - Provisioned IOPS (100-48,000)
+  - `profile` - Volume profile (general-purpose, 5iops-tier, 10iops-tier, custom)
+  - `zone` - Availability zone
+  - `volume_attachments` - Array of instances this volume is attached to
+  - `created_at` - Creation timestamp
+  - `encryption` - Encryption type (provider_managed or user_managed)
+
+  ## Next Steps
+  1. Note the volume IDs for any operations (get, update, delete, attach)
+  2. Check status - only "available" volumes can be attached
+  3. Use `get-volume.bru` for detailed information about a specific volume
+  4. Use `create-volume.bru` to create new volumes
+
+  ## Related Endpoints
+  - `list-volume-profiles.bru` - View available IOPS tiers
+  - `get-volume.bru` - Get specific volume details
+  - `create-volume.bru` - Create new volume
+  - `attachments/list-volume-attachments.bru` - List attachments for an instance
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const volumes = res.body.volumes;
+    console.log(`Found ${volumes.length} volume(s):\n`);
+
+    if (volumes.length === 0) {
+      console.log('No volumes found in this region.');
+      console.log('\nTo create a volume, run:');
+      console.log('  VOLUME_NAME="my-volume" ZONE_NAME="us-south-1" VOLUME_CAPACITY=100 VOLUME_PROFILE="general-purpose" \\');
+      console.log('    bru run auth/get-iam-token.bru vpc/volumes/create-volume.bru --env prod');
+    } else {
+      volumes.forEach((volume, index) => {
+        console.log(`--- Volume ${index + 1} ---`);
+        console.log(`Name: ${volume.name}`);
+        console.log(`ID: ${volume.id}`);
+        console.log(`Status: ${volume.status}`);
+        console.log(`Capacity: ${volume.capacity} GB`);
+        console.log(`IOPS: ${volume.iops}`);
+        console.log(`Profile: ${volume.profile?.name || 'N/A'}`);
+        console.log(`Zone: ${volume.zone?.name || 'N/A'}`);
+        console.log(`Encryption: ${volume.encryption}`);
+        console.log(`Created: ${volume.created_at}`);
+
+        if (volume.volume_attachments && volume.volume_attachments.length > 0) {
+          console.log(`Attachments: ${volume.volume_attachments.length}`);
+          volume.volume_attachments.forEach(attachment => {
+            console.log(`  - Instance: ${attachment.instance?.name || 'N/A'} (${attachment.instance?.id || 'N/A'})`);
+            console.log(`    Device: ${attachment.device?.id || 'N/A'}`);
+            console.log(`    Status: ${attachment.status || 'N/A'}`);
+          });
+        } else {
+          console.log(`Attachments: None (available for attachment)`);
+        }
+
+        console.log('');
+      });
+
+      console.log('=== SUMMARY ===');
+      const available = volumes.filter(v => v.status === 'available').length;
+      const attached = volumes.filter(v => v.status === 'attached').length;
+      const pending = volumes.filter(v => v.status === 'pending').length;
+      console.log(`Available: ${available}`);
+      console.log(`Attached: ${attached}`);
+      console.log(`Pending: ${pending}`);
+      console.log(`Total: ${volumes.length}`);
+
+      const totalCapacity = volumes.reduce((sum, v) => sum + (v.capacity || 0), 0);
+      console.log(`Total Capacity: ${totalCapacity} GB`);
+
+      console.log('\nTo get details about a specific volume, run:');
+      console.log('  VOLUME_ID="<volume-id>" bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod');
+    }
+
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}

@@ -1,0 +1,183 @@
+meta {
+  name: List Volume Profiles
+  type: http
+  seq: 1
+}
+
+get {
+  url: {{vpc_endpoint}}/v1/volume/profiles?version={{api_version}}&generation=2
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+docs {
+  # List Volume Profiles (IOPS Tiers)
+
+  ## Description
+  List all available volume profiles that define storage performance characteristics. Volume profiles determine IOPS (Input/Output Operations Per Second) tiers and capacity limits.
+
+  ## Available Profile Families
+
+  ### General Purpose (3 IOPS/GB)
+  - **Profile**: `general-purpose`
+  - **IOPS Range**: 100-48,000 (3 IOPS per GB)
+  - **Capacity Range**: 10-16,000 GB
+  - **Use Case**: Standard workloads, development, testing
+  - **Cost**: Lowest cost option
+
+  ### 5 IOPS Tier (5 IOPS/GB)
+  - **Profile**: `5iops-tier`
+  - **IOPS Range**: 100-48,000 (5 IOPS per GB)
+  - **Capacity Range**: 10-9,600 GB
+  - **Use Case**: Production databases, application servers
+  - **Cost**: Moderate
+
+  ### 10 IOPS Tier (10 IOPS/GB)
+  - **Profile**: `10iops-tier`
+  - **IOPS Range**: 100-48,000 (10 IOPS per GB)
+  - **Capacity Range**: 10-4,800 GB
+  - **Use Case**: High-performance databases, analytics
+  - **Cost**: Higher
+
+  ### Custom IOPS
+  - **Profile**: `custom`
+  - **IOPS Range**: 100-48,000 (user-defined)
+  - **Capacity Range**: 10-16,000 GB
+  - **Use Case**: Specific performance requirements
+  - **Cost**: Based on provisioned IOPS
+
+  ## Required Environment Variables
+  None - this endpoint requires no parameters
+
+  ## Example Usage
+
+  ### Using bru
+  ```bash
+  bru run auth/get-iam-token.bru vpc/volumes/list-volume-profiles.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  mise run volumes:list-profiles
+  ```
+
+  ## Response
+  - **200**: Success - Returns array of volume profiles with IOPS and capacity details
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## Response Fields
+  - `name` - Profile identifier (e.g., "general-purpose", "5iops-tier")
+  - `family` - Profile family (e.g., "tiered")
+  - `iops` - IOPS configuration with min/max/step values
+  - `capacity` - Capacity configuration with min/max/step values (in GB)
+
+  ## Next Steps
+  After reviewing profiles, use the appropriate profile when creating volumes:
+  1. Choose profile based on performance requirements
+  2. Calculate required capacity
+  3. Create volume with `create-volume.bru`
+
+  ## Related Endpoints
+  - `create-volume.bru` - Create volume with selected profile
+  - `list-volumes.bru` - List all volumes
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const profiles = res.body.profiles;
+    console.log(`Found ${profiles.length} volume profile(s):\n`);
+
+    console.log('=== GENERAL PURPOSE (3 IOPS/GB) ===');
+    const generalPurpose = profiles.filter(p => p.name === 'general-purpose');
+    generalPurpose.forEach(profile => {
+      console.log(`  Profile: ${profile.name}`);
+      console.log(`  Family: ${profile.family}`);
+      if (profile.iops) {
+        console.log(`  IOPS: ${profile.iops.default || 'N/A'} (type: ${profile.iops.type})`);
+        if (profile.iops.values) {
+          console.log(`    Min: ${profile.iops.values[0] || 'N/A'}, Max: ${profile.iops.values[profile.iops.values.length - 1] || 'N/A'}`);
+        }
+      }
+      if (profile.capacity) {
+        console.log(`  Capacity: ${profile.capacity.min || 'N/A'}-${profile.capacity.max || 'N/A'} GB (step: ${profile.capacity.step || 'N/A'})`);
+      }
+      console.log(`  Use Case: Standard workloads, development, testing`);
+      console.log(`  Cost: Lowest\n`);
+    });
+
+    console.log('=== 5 IOPS TIER (5 IOPS/GB) ===');
+    const tier5 = profiles.filter(p => p.name === '5iops-tier');
+    tier5.forEach(profile => {
+      console.log(`  Profile: ${profile.name}`);
+      console.log(`  Family: ${profile.family}`);
+      if (profile.iops) {
+        console.log(`  IOPS: ${profile.iops.default || 'N/A'} (type: ${profile.iops.type})`);
+        if (profile.iops.values) {
+          console.log(`    Min: ${profile.iops.values[0] || 'N/A'}, Max: ${profile.iops.values[profile.iops.values.length - 1] || 'N/A'}`);
+        }
+      }
+      if (profile.capacity) {
+        console.log(`  Capacity: ${profile.capacity.min || 'N/A'}-${profile.capacity.max || 'N/A'} GB (step: ${profile.capacity.step || 'N/A'})`);
+      }
+      console.log(`  Use Case: Production databases, application servers`);
+      console.log(`  Cost: Moderate\n`);
+    });
+
+    console.log('=== 10 IOPS TIER (10 IOPS/GB) ===');
+    const tier10 = profiles.filter(p => p.name === '10iops-tier');
+    tier10.forEach(profile => {
+      console.log(`  Profile: ${profile.name}`);
+      console.log(`  Family: ${profile.family}`);
+      if (profile.iops) {
+        console.log(`  IOPS: ${profile.iops.default || 'N/A'} (type: ${profile.iops.type})`);
+        if (profile.iops.values) {
+          console.log(`    Min: ${profile.iops.values[0] || 'N/A'}, Max: ${profile.iops.values[profile.iops.values.length - 1] || 'N/A'}`);
+        }
+      }
+      if (profile.capacity) {
+        console.log(`  Capacity: ${profile.capacity.min || 'N/A'}-${profile.capacity.max || 'N/A'} GB (step: ${profile.capacity.step || 'N/A'})`);
+      }
+      console.log(`  Use Case: High-performance databases, analytics`);
+      console.log(`  Cost: Higher\n`);
+    });
+
+    console.log('=== CUSTOM IOPS ===');
+    const custom = profiles.filter(p => p.name === 'custom');
+    custom.forEach(profile => {
+      console.log(`  Profile: ${profile.name}`);
+      console.log(`  Family: ${profile.family}`);
+      if (profile.iops) {
+        console.log(`  IOPS: User-defined (type: ${profile.iops.type})`);
+        if (profile.iops.values) {
+          console.log(`    Min: ${profile.iops.values[0] || 'N/A'}, Max: ${profile.iops.values[profile.iops.values.length - 1] || 'N/A'}`);
+        }
+      }
+      if (profile.capacity) {
+        console.log(`  Capacity: ${profile.capacity.min || 'N/A'}-${profile.capacity.max || 'N/A'} GB (step: ${profile.capacity.step || 'N/A'})`);
+      }
+      console.log(`  Use Case: Specific performance requirements`);
+      console.log(`  Cost: Based on provisioned IOPS\n`);
+    });
+
+    console.log('\n=== RECOMMENDATIONS ===');
+    console.log('Development/Testing: general-purpose (100 GB)');
+    console.log('Production Database: 5iops-tier or 10iops-tier (500+ GB)');
+    console.log('High-Performance: 10iops-tier or custom (1000+ GB)');
+    console.log('Cost-Optimized: general-purpose with larger capacity');
+
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}

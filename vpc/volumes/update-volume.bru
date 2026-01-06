@@ -1,0 +1,212 @@
+meta {
+  name: Update Volume
+  type: http
+  seq: 5
+}
+
+patch {
+  url: {{vpc_endpoint}}/v1/volumes/{{volume_id}}?version={{api_version}}&generation=2
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{bearer_token}}
+}
+
+body:json {
+  {
+    "name": "{{NEW_VOLUME_NAME}}",
+    "capacity": {{VOLUME_CAPACITY}}
+  }
+}
+
+docs {
+  # Update Volume
+
+  ## Description
+  Update a volume's name or capacity. Capacity can be increased (but never decreased) even while the volume is attached to an instance.
+
+  ## Required Environment Variables
+  - `VOLUME_ID` - The ID of the volume to update
+
+  ## Optional Environment Variables (Provide at least one)
+  - `NEW_VOLUME_NAME` - New name for the volume
+  - `VOLUME_CAPACITY` - New capacity in GB (must be larger than current)
+
+  ## Important Notes
+
+  ### Capacity Updates
+  - **Can increase**: Yes, at any time
+  - **Can decrease**: No, never (IBM Cloud limitation)
+  - **While attached**: Yes, can increase capacity on attached volumes
+  - **Increment**: Minimum 1 GB
+  - **Maximum**: 16,000 GB (16 TB)
+  - **Downtime**: None (online expansion)
+
+  ### Name Updates
+  - Can rename at any time
+  - Must be unique within your account
+  - No impact on attachments or data
+
+  ## Example Usage
+
+  ### Using bru - Rename Volume
+  ```bash
+  VOLUME_ID="r006-abc123..." NEW_VOLUME_NAME="production-db-volume" \
+    bru run auth/get-iam-token.bru vpc/volumes/update-volume.bru --env prod
+  ```
+
+  ### Using bru - Increase Capacity
+  ```bash
+  # Increase from 100 GB to 200 GB
+  VOLUME_ID="r006-abc123..." VOLUME_CAPACITY=200 \
+    bru run auth/get-iam-token.bru vpc/volumes/update-volume.bru --env prod
+  ```
+
+  ### Using bru - Update Both
+  ```bash
+  VOLUME_ID="r006-abc123..." NEW_VOLUME_NAME="large-data-volume" VOLUME_CAPACITY=500 \
+    bru run auth/get-iam-token.bru vpc/volumes/update-volume.bru --env prod
+  ```
+
+  ### Using mise
+  ```bash
+  VOLUME_ID="r006-abc123..." VOLUME_CAPACITY=200 mise run volumes:update
+  ```
+
+  ## Response
+  - **200**: Success - Volume updated
+  - **400**: Bad Request - Invalid parameters (e.g., decreasing capacity)
+  - **404**: Not Found - Volume ID does not exist
+  - **409**: Conflict - New name already in use
+  - **401**: Unauthorized - Token expired, re-authenticate
+
+  ## After Capacity Increase
+
+  If you increased capacity on an attached volume, you must also:
+
+  ### 1. Extend the Partition (Linux)
+  ```bash
+  # Check current size
+  lsblk
+
+  # Extend partition (for ext4)
+  sudo resize2fs /dev/vdd
+
+  # For XFS
+  sudo xfs_growfs /mnt/data
+
+  # Verify new size
+  df -h /mnt/data
+  ```
+
+  ### 2. Extend the Partition (Windows)
+  ```powershell
+  # Open Disk Management
+  # Right-click volume → Extend Volume
+  # Follow wizard to use new space
+  ```
+
+  ## Next Steps
+  After update:
+  1. Verify changes with `get-volume.bru`
+  2. If capacity increased on attached volume, extend filesystem in OS
+  3. Confirm new capacity available with `df -h` (Linux) or Disk Management (Windows)
+
+  ## Related Endpoints
+  - `get-volume.bru` - Verify update
+  - `list-volumes.bru` - View all volumes
+}
+
+script:post-response {
+  if (res.status === 200) {
+    const volume = res.body;
+
+    console.log('✓ Volume updated successfully!\n');
+
+    console.log('=== UPDATED VOLUME ===');
+    console.log(`Name: ${volume.name}`);
+    console.log(`ID: ${volume.id}`);
+    console.log(`Status: ${volume.status}`);
+    console.log('');
+
+    console.log('=== CAPACITY & PERFORMANCE ===');
+    console.log(`Capacity: ${volume.capacity} GB`);
+    console.log(`IOPS: ${volume.iops}`);
+    console.log(`Profile: ${volume.profile?.name || 'N/A'}`);
+    console.log('');
+
+    if (volume.volume_attachments && volume.volume_attachments.length > 0) {
+      console.log('=== ATTACHED TO ===');
+      volume.volume_attachments.forEach((attachment, index) => {
+        console.log(`Instance ${index + 1}: ${attachment.instance?.name || 'N/A'} (${attachment.instance?.id || 'N/A'})`);
+      });
+      console.log('');
+
+      console.log('⚠️  IMPORTANT: Volume is attached to instance(s)');
+      console.log('');
+      console.log('If you increased capacity, you must extend the filesystem in the OS:');
+      console.log('');
+      console.log('Linux (ext4):');
+      console.log('  sudo resize2fs /dev/vdd');
+      console.log('');
+      console.log('Linux (XFS):');
+      console.log('  sudo xfs_growfs /mnt/data');
+      console.log('');
+      console.log('Windows:');
+      console.log('  Disk Management → Right-click volume → Extend Volume');
+      console.log('');
+      console.log('Verify new size:');
+      console.log('  df -h /mnt/data   (Linux)');
+      console.log('  Disk Management   (Windows)');
+    }
+
+    console.log('');
+    console.log('To verify update, run:');
+    console.log(`  VOLUME_ID="${volume.id}" bru run auth/get-iam-token.bru vpc/volumes/get-volume.bru --env prod`);
+
+  } else if (res.status === 400) {
+    console.error('✗ Bad Request - Invalid parameters\n');
+    console.error('Common issues:');
+    console.error('  - Attempting to decrease capacity (not allowed)');
+    console.error('  - Capacity exceeds maximum (16,000 GB)');
+    console.error('  - Invalid volume ID format');
+    console.error('');
+    if (res.body && res.body.errors) {
+      console.error('Error details:');
+      res.body.errors.forEach(err => {
+        console.error(`  - ${err.message || 'Unknown error'}`);
+      });
+    }
+    console.error('');
+    console.error('Note: Capacity can only be increased, never decreased.');
+
+  } else if (res.status === 404) {
+    console.error('✗ Volume not found\n');
+    console.error('Possible causes:');
+    console.error('  - Volume ID is incorrect');
+    console.error('  - Volume has been deleted');
+    console.error('  - Volume is in a different region');
+    console.error('');
+    console.error('To list all volumes:');
+    console.error('  bru run auth/get-iam-token.bru vpc/volumes/list-volumes.bru --env prod');
+
+  } else if (res.status === 409) {
+    console.error('✗ Conflict - Name already in use\n');
+    console.error('The new volume name is already taken by another volume.');
+    console.error('');
+    console.error('Solution: Choose a different name');
+
+  } else if (res.status === 401) {
+    console.error('Authentication failed. Please re-run authentication:');
+    console.error('  bru run auth/get-iam-token.bru --env prod');
+  } else {
+    console.error(`Error: ${res.status}`);
+    if (res.body && res.body.errors) {
+      res.body.errors.forEach(err => {
+        console.error(`  ${err.message || 'Unknown error'}`);
+      });
+    }
+  }
+}
